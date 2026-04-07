@@ -36,13 +36,17 @@ ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', str, [])  # type: ignore[report
 # Application definition
 
 INSTALLED_APPS = [
-    'api',
+    # Django apps
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Auxilary apps
+    'rest_framework',
+    # Project apps
+    'api',
 ]
 
 MIDDLEWARE = [
@@ -72,6 +76,8 @@ TEMPLATES = [
     },
 ]
 
+REST_FRAMEWORK = {}
+
 WSGI_APPLICATION = 'project.wsgi.application'
 
 
@@ -82,6 +88,7 @@ DATABASES = {
     'default': env.db('DJANGO_DATABASE_URL', default='sqlite:///db.sqlite3'),  # type: ignore[reportArgumentType]
 }
 
+AUTH_USER_MODEL = 'api.User'
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -110,6 +117,8 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
+
+USE_L10N = True
 
 USE_TZ = True
 
