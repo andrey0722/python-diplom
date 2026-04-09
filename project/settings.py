@@ -76,7 +76,11 @@ TEMPLATES = [
     },
 ]
 
-REST_FRAMEWORK = {}
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'api.authentication.TokenAuthentication',
+    ]
+}
 
 WSGI_APPLICATION = 'project.wsgi.application'
 

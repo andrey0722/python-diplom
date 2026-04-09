@@ -1,10 +1,12 @@
-from typing import Any, cast
+from typing import Any, cast, override
 
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import CreateAPIView
+from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -38,3 +40,17 @@ class UserLoginView(APIView):
         token = Token.objects.create(user=user)
         serializer = TokenSerializer(token)
         return Response(serializer.data)
+
+
+class UserInfoView(RetrieveUpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = (IsAuthenticated,)
+
+    @override
+    def get_object(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+        # Use only current authorized user
+        return self.request.user
+
+    def post(self, request, *args, **kwargs):
+        # Also allow POST for updating
+        return self.patch(request, *args, **kwargs)
