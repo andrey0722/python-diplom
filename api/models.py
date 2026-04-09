@@ -33,10 +33,5 @@ class User(AbstractUser):
     company = models.CharField(_('company'), max_length=50, blank=True)
     position = models.CharField(_('position'), max_length=50, blank=True)
 
-    @property
-    def username(self):
-        """Exclude username field from user model."""
-
-    @username.setter
-    def username(self, _):
-        """Dummy setter."""
+    username = None
+    """Exclude username field from user model."""
