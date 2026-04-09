@@ -3,7 +3,9 @@ from typing import override
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager as BaseUserManager
 from django.db import models
+from django.db.models import UniqueConstraint
 from django.utils.translation import gettext_lazy as _
+from rest_framework.authtoken.models import Token as BaseToken
 
 DUMMY_USERNAME = '_'
 """Use this username for all users since we use email to identify users."""
@@ -35,3 +37,19 @@ class User(AbstractUser):
 
     username = None
     """Exclude username field from user model."""
+
+
+class Token(BaseToken):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='auth_tokens',
+        verbose_name=_('User'),
+    )
+    """Override one-to-one with many-to-one."""
+
+    class Meta(BaseToken.Meta):
+        abstract = False
+        constraints = [
+            UniqueConstraint(fields=['key', 'user'], name='uq_key_user'),
+        ]

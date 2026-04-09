@@ -40,3 +40,12 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
             instance.save()
         return instance
+
+
+class UserLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(style={'input_type': 'password'})
+
+
+class TokenSerializer(serializers.Serializer):
+    token = serializers.CharField(source='key')
