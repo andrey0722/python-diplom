@@ -76,6 +76,18 @@ TEMPLATES = [
     },
 ]
 
+
+EMAIL_BACKEND = env.str(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend',
+)
+EMAIL_HOST = env.str('EMAIL_HOST', 'smtp.example.com')
+EMAIL_PORT = env.int('EMAIL_PORT', 587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', True)
+EMAIL_HOST_USER = env.str('EMAIL_USERNAME', 'email_username')
+EMAIL_HOST_PASSWORD = env.str('EMAIL_PASSWORD', 'email_password')
+
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'api.authentication.TokenAuthentication',
