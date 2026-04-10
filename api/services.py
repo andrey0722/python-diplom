@@ -12,8 +12,23 @@ from rest_framework.request import Request
 from rest_framework.serializers import BaseSerializer
 
 from .models import User
+from .serializers import EmailConfirmSerializer
 
 logger = logging.getLogger(__name__)
+
+
+def serialize(cls: type[BaseSerializer], instance: object) -> dict[str, Any]:
+    """Serialize an instance using the given serializer class.
+
+    Args:
+        cls (type[BaseSerializer]): The serializer class to use.
+        instance (object): The instance to serialize.
+
+    Returns:
+        dict[str, Any]: The serialized data.
+    """
+    serializer: BaseSerializer = cls(instance=instance)
+    return cast(dict[str, Any], serializer.data)
 
 
 def validate_data(
@@ -119,6 +134,7 @@ def send_email_verification_mail(  # noqa: PLR0913
     request_type: str = 'POST'
     token = token_generator.make_token(user)
     request_data = {'email': email, 'token': token}
+    request_data = serialize(EmailConfirmSerializer, request_data)
     request_data = json.dumps(request_data, indent=4)
 
     current_site = get_current_site(request)
