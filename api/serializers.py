@@ -31,6 +31,14 @@ class UserSerializer(serializers.ModelSerializer):
 
     @override
     def create(self, validated_data: dict[str, Any]):
+        """Create user and hash a password.
+
+        Args:
+            validated_data (dict[str, Any]): The validated data.
+
+        Returns:
+            User: The created user instance.
+        """
         password = validated_data.pop('password')
         instance: User = super().create(validated_data)
         instance.set_password(password)
@@ -40,6 +48,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     @override
     def update(self, instance: User, validated_data: dict[str, Any]):
+        """Update user and password if provided.
+
+        Args:
+            instance (User): The user instance to update.
+            validated_data (dict[str, Any]): The validated data.
+
+        Returns:
+            User: The updated user instance.
+        """
         password = validated_data.pop('password', None)
         instance = super().update(instance, validated_data)
         if password is not None:

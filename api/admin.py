@@ -7,6 +7,8 @@ from .models import User
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    """Django admin configuration for User model."""
+
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (

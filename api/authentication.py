@@ -6,4 +6,6 @@ from .models import Token
 
 
 class TokenAuthentication(BaseTokenAuthentication):
+    """Token authentication with custom token model."""
+
     model = Token

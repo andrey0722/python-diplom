@@ -93,6 +93,14 @@ class UserLoginView(APIView):
     serializer_class = UserLoginSerializer
 
     def post(self, request: Request) -> Response:
+        """Authenticate user and return new user API token.
+
+        Args:
+            request (Request): The request object.
+
+        Returns:
+            Response: The user API token.
+        """
         credentials = validate_data(self.serializer_class, request.data)
 
         user = authenticate(cast(HttpRequest, request), **credentials)
@@ -115,9 +123,9 @@ class UserInfoView(RetrieveUpdateAPIView):
 
     @override
     def get_object(self):  # pyright: ignore[reportIncompatibleMethodOverride]
-        # Use only current authorized user
+        """Return the current authorized user."""
         return self.request.user
 
     def post(self, request, *args, **kwargs):
-        # Also allow POST for updating
+        """Allow  also POST request for updating user info."""
         return self.patch(request, *args, **kwargs)

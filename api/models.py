@@ -16,10 +16,12 @@ class UserManager(BaseUserManager):
 
     @override
     def create_user(self, *args, **kwargs):
+        """Create user with dummy username."""
         return super().create_user(DUMMY_USERNAME, *args, **kwargs)
 
     @override
     def create_superuser(self, *args, **kwargs):
+        """Create superuser with dummy username."""
         return super().create_superuser(DUMMY_USERNAME, *args, **kwargs)
 
 
