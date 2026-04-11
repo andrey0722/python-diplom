@@ -10,6 +10,7 @@ from django.http import HttpRequest
 from django.template.loader import render_to_string
 from rest_framework.request import Request
 from rest_framework.serializers import BaseSerializer
+from rest_framework.views import APIView
 
 from .models import User
 from .serializers import EmailConfirmSerializer
@@ -29,6 +30,27 @@ def serialize(cls: type[BaseSerializer], instance: object) -> dict[str, Any]:
     """
     serializer: BaseSerializer = cls(instance=instance)
     return cast(dict[str, Any], serializer.data)
+
+
+def validate_request(
+    cls: type[BaseSerializer],
+    view: APIView,
+    /,
+    raise_exception: bool = True,
+) -> dict[str, Any]:
+    """Validate serializer data from a view request.
+
+    Args:
+        cls (type[BaseSerializer]): The serializer class to use.
+        view (APIView): The view containing the request.
+        raise_exception (bool): Whether to raise exception on invalid data.
+
+    Returns:
+        dict[str, Any]: The validated data.
+    """
+    request = cast(Request, view.request)
+    data = cast(dict[str, Any], request.data)
+    return validate_data(cls, data, raise_exception=raise_exception)
 
 
 def validate_data(

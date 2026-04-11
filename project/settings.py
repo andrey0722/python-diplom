@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # Auxilary apps
+    'phonenumber_field',
     'rest_framework',
     # Project apps
     'api',

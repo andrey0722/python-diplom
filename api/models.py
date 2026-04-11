@@ -5,6 +5,7 @@ from django.contrib.auth.models import UserManager as BaseUserManager
 from django.db import models
 from django.db.models import UniqueConstraint
 from django.utils.translation import gettext_lazy as _
+from phonenumber_field.modelfields import PhoneNumberField
 from rest_framework.authtoken.models import Token as BaseToken
 
 DUMMY_USERNAME = '_'
@@ -55,3 +56,37 @@ class Token(BaseToken):
         constraints = [
             UniqueConstraint(fields=['key', 'user'], name='uq_key_user'),
         ]
+
+
+class Contact(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='contacts',
+        verbose_name=_('user'),
+    )
+    first_name = models.CharField(_('first name'), max_length=150, blank=True)
+    middle_name = models.CharField(
+        _('middle name'),
+        max_length=150,
+        blank=True,
+    )
+    last_name = models.CharField(_('last name'), max_length=150, blank=True)
+    email = models.EmailField(_('email address'), blank=True)
+    phone = PhoneNumberField(_('phone number'))
+    city = models.CharField(_('city'), max_length=100)
+    street = models.CharField(_('street'), max_length=100)
+    house = models.CharField(_('house'), max_length=50)
+    structure = models.CharField(_('structure'), max_length=8, blank=True)
+    building = models.CharField(_('building'), max_length=8, blank=True)
+    apartment = models.CharField(_('apartment'), max_length=8)
+
+    class Meta:
+        verbose_name = _('contact')
+        verbose_name_plural = _('contacts')
+
+    def __str__(self) -> str:
+        """Return the contact address as a formatted string."""
+        house_parts = (self.house, self.structure, self.building)
+        house = ' '.join(filter(len, house_parts))
+        return f'{self.city}, {self.street} {house}, {self.apartment}'

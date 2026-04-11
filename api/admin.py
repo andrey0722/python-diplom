@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 
+from .models import Contact
 from .models import User
 
 
@@ -37,3 +38,7 @@ class UserAdmin(BaseUserAdmin):
         (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
     )
     ordering = ('email',)
+
+
+@admin.register(Contact)
+class ContactAdmin(admin.ModelAdmin): ...

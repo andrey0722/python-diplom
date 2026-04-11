@@ -1,7 +1,9 @@
 from typing import Any, override
 
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from .models import Contact
 from .models import User
 
 
@@ -101,3 +103,49 @@ class UserLoginSerializer(serializers.Serializer):
 
 class TokenSerializer(serializers.Serializer):
     token = serializers.CharField(source='key')
+
+
+class ContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = (
+            'id',
+            'first_name',
+            'middle_name',
+            'last_name',
+            'email',
+            'phone',
+            'city',
+            'street',
+            'house',
+            'structure',
+            'building',
+            'apartment',
+        )
+        read_only_fields = ('id',)
+
+
+class IdSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+
+
+class ItemsSerializer(serializers.Serializer):
+    items = serializers.CharField(required=False, default='')
+
+    def validate_items(self, value: str) -> list[int]:
+        """Validate a comma-separated list of item IDs.
+
+        Args:
+            value (str): Comma-separated item IDs.
+
+        Returns:
+            list[int]: Parsed item IDs.
+        """
+        parts = [part.strip() for part in value.split(',')]
+        try:
+            result = [int(part) for part in parts if part]
+        except ValueError:
+            raise serializers.ValidationError(_('All items must be integers.'))
+        if not result:
+            raise serializers.ValidationError(_('Empty number list.'))
+        return result
