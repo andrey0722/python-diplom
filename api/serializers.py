@@ -7,14 +7,21 @@ from .models import Contact
 from .models import User
 
 
+class PasswordField(serializers.CharField):
+    """Password input field using hidden input rendering in forms."""
+
+    def __init__(self, **kwargs):
+        """Initialize password field styling."""
+        super().__init__(
+            style={'input_type': 'password'},
+            **kwargs,
+        )
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model with password handling."""
 
-    password = serializers.CharField(
-        write_only=True,
-        required=True,
-        style={'input_type': 'password'},
-    )
+    password = PasswordField(write_only=True)
 
     class Meta:
         model = User
@@ -100,6 +107,17 @@ class SendEmailVerificationSerializer(EmailToUserSerializer):
 class EmailConfirmSerializer(EmailToUserSerializer):
     """Serializer for email confirmation with token."""
 
+    token = serializers.CharField()
+
+
+class SendPasswordResetSerializer(EmailToUserSerializer):
+    """Serializer for sending password reset emails."""
+
+
+class PasswordResetConfirmSerializer(EmailToUserSerializer):
+    """Serializer for confirming password reset using a token."""
+
+    password = PasswordField()
     token = serializers.CharField()
 
 

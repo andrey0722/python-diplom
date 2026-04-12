@@ -1,7 +1,9 @@
 from django.urls import path
 
 from .views import EmailConfirmView
+from .views import PasswordResetConfirmView
 from .views import SendEmailVerificationView
+from .views import SendPasswordResetView
 from .views import UserContactsView
 from .views import UserInfoView
 from .views import UserLoginView
@@ -14,6 +16,12 @@ urlpatterns = [
         'user/register/confirm',
         EmailConfirmView.as_view(),
         name='email-confirm',
+    ),
+    path('user/password_reset', SendPasswordResetView.as_view()),
+    path(
+        'user/password_reset/confirm',
+        PasswordResetConfirmView.as_view(),
+        name='password-reset-confirm',
     ),
     path('user/login', UserLoginView.as_view()),
     path('user/details', UserInfoView.as_view()),

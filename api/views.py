@@ -1,5 +1,6 @@
+from collections.abc import Callable
 import logging
-from typing import cast, override
+from typing import Any, NoReturn, cast, override
 
 from django.contrib.auth.signals import user_logged_in
 from django.db.models.query import QuerySet
@@ -10,6 +11,7 @@ from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.exceptions import NotFound
 from rest_framework.generics import CreateAPIView
+from rest_framework.generics import GenericAPIView
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.generics import UpdateAPIView
@@ -19,7 +21,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
-from .exceptions import EmailConfirmError
+from .exceptions import TokenConfirmError
 from .models import Contact
 from .models import Token
 from .models import User
@@ -27,16 +29,49 @@ from .serializers import ContactSerializer
 from .serializers import EmailConfirmSerializer
 from .serializers import IdSerializer
 from .serializers import ItemsSerializer
+from .serializers import PasswordResetConfirmSerializer
 from .serializers import SendEmailVerificationSerializer
+from .serializers import SendPasswordResetSerializer
 from .serializers import TokenSerializer
 from .serializers import UserLoginSerializer
 from .serializers import UserSerializer
-from .services import check_user_token
+from .services import check_email_verify_token
+from .services import check_password_reset_token
 from .services import send_email_verification_mail
+from .services import send_password_reset_mail
 from .services import validate_data
 from .services import validate_request
 
 logger = logging.getLogger(__name__)
+
+
+class TokenConfirmView(GenericAPIView):
+    """Base view for validating user confirmation tokens."""
+
+    serializer_class = None
+    """Serializer must have 'user' and 'token' fields."""
+
+    validate_token: Callable[[User, str], bool] | None = None
+
+    def post(self, request: Request) -> Response:
+        """Validate request data and confirm the provided token."""
+        assert self.serializer_class is not None, 'Serializer is not set'
+        data = validate_data(self.serializer_class, request.data)
+        user: User | None = data['user']
+        token: str = data['token']
+
+        assert self.validate_token is not None, 'Token validator is not set'
+        if not check_password_reset_token(user, token):
+            self.bad_token()
+        return self.token_confirmed(data)
+
+    def bad_token(self) -> NoReturn:
+        """Handle invalid tokens."""
+        raise TokenConfirmError
+
+    def token_confirmed(self, data: dict[str, Any]) -> Response:  # noqa: ARG002
+        """Actions when valid token is provided."""
+        return Response(_('Token confirmed.'))
 
 
 class UserRegisterView(CreateAPIView):
@@ -70,31 +105,46 @@ class SendEmailVerificationView(APIView):
         return Response(_('Verification email is sent if needed.'))
 
 
-class EmailConfirmView(APIView):
+class EmailConfirmView(TokenConfirmView):
     """View for confirming email with token."""
 
     serializer_class = EmailConfirmSerializer
+    validate_token = check_email_verify_token
 
-    def post(self, request: Request) -> Response:
-        """Confirm user email and activate account.
-
-        Args:
-            request (Request): The request object.
-
-        Returns:
-            Response: Success message.
-        """
-        data = validate_data(self.serializer_class, request.data)
-        user: User | None = data['user']
-        token: str = data['token']
-        if not check_user_token(user, token):
-            raise EmailConfirmError
-
-        # Email confirmed, activate the user
-        user = cast(User, user)
+    @override
+    def token_confirmed(self, data: dict[str, Any]) -> Response:
+        """Activate the user account on valid token."""
+        user = cast(User, data['user'])
         user.is_active = True
         user.save()
         return Response(_('Email successfully verified.'))
+
+
+class SendPasswordResetView(APIView):
+    """View for sending password reset emails."""
+
+    serializer_class = SendPasswordResetSerializer
+
+    def post(self, request: Request) -> Response:
+        """Send a password reset email to user."""
+        data = validate_data(self.serializer_class, request.data)
+        send_password_reset_mail(request, **data)
+        return Response(_('Password reset email is sent if needed.'))
+
+
+class PasswordResetConfirmView(TokenConfirmView):
+    """View for confirming password reset with token."""
+
+    serializer_class = PasswordResetConfirmSerializer
+    validate_token = check_password_reset_token
+
+    @override
+    def token_confirmed(self, data: dict[str, Any]) -> Response:
+        """Update user password on valid token."""
+        user = cast(User, data['user'])
+        user.set_password(data['password'])
+        user.save()
+        return Response(_('Password successfully reset.'))
 
 
 class UserLoginView(APIView):

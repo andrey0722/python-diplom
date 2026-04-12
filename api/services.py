@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 
 from .models import User
 from .serializers import EmailConfirmSerializer
+from .serializers import PasswordResetConfirmSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,12 @@ def get_validated_data(serializer: BaseSerializer) -> dict[str, Any]:
 class TokenGenerator(PasswordResetTokenGenerator):
     """Custom token generator for one-time validation codes."""
 
+    def __init__(self, salt: str | None = None) -> None:
+        """Initialize the token generator with an optional salt."""
+        super().__init__()
+        if salt is not None:
+            self.key_salt = salt
+
     @override
     def _make_hash_value(self, user: AbstractBaseUser, timestamp: int) -> str:
         """Return a hash value for the one-time validation token.
@@ -107,10 +114,11 @@ class TokenGenerator(PasswordResetTokenGenerator):
         return f'{result}{user.is_active}'
 
 
-token_generator = TokenGenerator()
+email_verify_token_gen = TokenGenerator('email-verify')
+password_reset_token_gen = TokenGenerator('password-reset')
 
 
-def check_user_token(user: User | None, token: str | None):
+def check_email_verify_token(user: User | None, token: str | None):
     """Check if the token is valid for the user.
 
     Args:
@@ -120,7 +128,53 @@ def check_user_token(user: User | None, token: str | None):
     Returns:
         bool: True if token is valid.
     """
-    return token_generator.check_token(user, token)
+    return email_verify_token_gen.check_token(user, token)
+
+
+def check_password_reset_token(user: User | None, token: str | None):
+    """Check if the password reset token is valid for the user.
+
+    Args:
+        user (User | None): The user instance to validate.
+        token (str | None): The token string to check.
+
+    Returns:
+        bool: True if the token is valid for the given user.
+    """
+    return password_reset_token_gen.check_token(user, token)
+
+
+def get_template_context(request: HttpRequest | Request):
+    """Build the base context used for email message templates."""
+    if isinstance(request, Request):
+        # `Request` works as a proxy over `HttpRequest`
+        request = cast(HttpRequest, request)
+    current_site = get_current_site(request)
+    site_name = current_site.name
+    domain = current_site.domain
+    use_https = request.is_secure()
+    return {
+        'domain': domain,
+        'site_name': site_name,
+        'protocol': 'https' if use_https else 'http',
+    }
+
+
+def format_request_data(
+    data: object,
+    serializer: type[BaseSerializer],
+) -> str:
+    """Format serializer data as pretty-printed JSON for email templates.
+
+    Args:
+        data (object): The raw data to validate and serialize.
+        serializer (type[BaseSerializer]): The serializer class for `data`.
+
+    Returns:
+        str: The serialized JSON string.
+    """
+    request_data = serialize(serializer, data)
+    return json.dumps(request_data, indent=4)
 
 
 def send_email_verification_mail(  # noqa: PLR0913
@@ -150,29 +204,74 @@ def send_email_verification_mail(  # noqa: PLR0913
         logger.info('User %s already confirmed', user.email)
         return
 
-    if isinstance(request, Request):
-        # `Request` works as a proxy over `HttpRequest`
-        request = cast(HttpRequest, request)
+    email = user.email
+    request_type = 'POST'
+    token = email_verify_token_gen.make_token(user)
+    data = format_request_data(
+        {'email': email, 'token': token},
+        EmailConfirmSerializer,
+    )
+
+    context = get_template_context(request)
+    context |= {
+        'email': email,
+        'user': user,
+        'request_type': request_type,
+        'request_data': data,
+        'token': token,
+    }
+
+    render_and_send_mail(
+        subject_template=subject_template,
+        message_template=message_template,
+        html_template=html_template,
+        context=context,
+        to_email=email,
+        from_email=from_email,
+    )
+
+
+def send_password_reset_mail(  # noqa: PLR0913
+    request: HttpRequest | Request,
+    user: User | None,
+    email: str | None = None,
+    subject_template: str = 'api/password_reset_subject.txt',
+    message_template: str = 'api/password_reset_email.txt',
+    html_template: str = 'api/password_reset_email.html',
+    from_email: str | None = None,
+):
+    """Send a password reset email to the given user.
+
+    Args:
+        request (HttpRequest | Request): The request object.
+        user (User | None): The user who will receive the reset email.
+        email (str | None): Optional override email address.
+        subject_template (str): Template path for the email subject.
+        message_template (str): Template path for the plain text email body.
+        html_template (str): Template path for the HTML email body.
+        from_email (str | None): Optional from-address for the email.
+    """
+    if user is None:
+        logger.info('User %s does not exist', email)
+        return
+    if not user.is_active:
+        logger.info('User %s is inactive', user.email)
+        return
 
     email = user.email
-    request_type: str = 'POST'
-    token = token_generator.make_token(user)
-    request_data = {'email': email, 'token': token}
-    request_data = serialize(EmailConfirmSerializer, request_data)
-    request_data = json.dumps(request_data, indent=4)
+    request_type = 'POST'
+    token = password_reset_token_gen.make_token(user)
+    data = format_request_data(
+        {'email': email, 'password': 'your_new_password', 'token': token},
+        PasswordResetConfirmSerializer,
+    )
 
-    current_site = get_current_site(request)
-    site_name = current_site.name
-    domain = current_site.domain
-    use_https = request.is_secure()
-    context = {
+    context = get_template_context(request)
+    context |= {
         'email': email,
-        'domain': domain,
-        'site_name': site_name,
         'user': user,
-        'protocol': 'https' if use_https else 'http',
         'request_type': request_type,
-        'request_data': request_data,
+        'request_data': data,
         'token': token,
     }
 
@@ -194,7 +293,16 @@ def render_and_send_mail(  # noqa: PLR0913
     from_email: str | None = None,
     html_template: str | None = None,
 ):
-    """Send a django.core.mail.EmailMultiAlternatives to `to_email`."""
+    """Send a django.core.mail.EmailMultiAlternatives to `to_email`.
+
+    Args:
+        subject_template (str): Path to the email subject template.
+        message_template (str): Path to the plain text email body template.
+        context (dict[str, Any]): Template context data.
+        to_email (str): Recipient email address.
+        from_email (str | None): Optional sender email address.
+        html_template (str | None): Optional HTML template path.
+    """
     subject = render_to_string(subject_template, context)
     # Email subject *must not* contain newlines
     subject = ''.join(subject.splitlines())

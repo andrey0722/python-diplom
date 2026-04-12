@@ -3,9 +3,9 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 
 
-class EmailConfirmError(APIException):
-    """Failed to confirm user email."""
+class TokenConfirmError(APIException):
+    """Failed to validate user confirmation token."""
 
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = _('Invalid email or token.')
-    default_code = 'email_confirm_error'
+    default_code = 'password_reset_error'
