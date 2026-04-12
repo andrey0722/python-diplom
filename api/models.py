@@ -41,6 +41,11 @@ class User(AbstractUser):
     username = None
     """Exclude username field from user model."""
 
+    @property
+    def full_name(self) -> str:
+        """Return the user's full name."""
+        return self.get_full_name()
+
 
 class Token(BaseToken):
     user = models.ForeignKey(
@@ -87,6 +92,23 @@ class Contact(models.Model):
 
     def __str__(self) -> str:
         """Return the contact address as a formatted string."""
+        return self.address
+
+    @property
+    def address(self):
+        """Return the formatted address string."""
         house_parts = (self.house, self.structure, self.building)
-        house = ' '.join(filter(len, house_parts))
+        house = ' '.join(filter(len, map(str.strip, house_parts)))
         return f'{self.city}, {self.street} {house}, {self.apartment}'
+
+    @property
+    def contact_person(self):
+        """Return the contact person's full name."""
+        name_parts = (self.first_name, self.middle_name, self.last_name)
+        name = ' '.join(filter(len, map(str.strip, name_parts)))
+        return name or self.user.full_name
+
+    @property
+    def contact_email(self) -> str:
+        """Return the contact email, falling back to user's email."""
+        return self.email or self.user.email
