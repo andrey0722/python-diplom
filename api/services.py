@@ -87,6 +87,8 @@ def get_validated_data(serializer: BaseSerializer) -> dict[str, Any]:
 
 
 class TokenGenerator(PasswordResetTokenGenerator):
+    """Custom token generator for one-time validation codes."""
+
     @override
     def _make_hash_value(self, user: AbstractBaseUser, timestamp: int) -> str:
         """Return a hash value for the one-time validation token.

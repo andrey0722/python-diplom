@@ -8,6 +8,8 @@ from .models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """Serializer for User model with password handling."""
+
     password = serializers.CharField(
         write_only=True,
         required=True,
@@ -68,6 +70,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class EmailToUserSerializer(serializers.Serializer):
+    """Serializer for email input with user lookup."""
+
     email = serializers.EmailField()
 
     @override
@@ -89,23 +93,32 @@ class EmailToUserSerializer(serializers.Serializer):
         return attrs
 
 
-class SendEmailVerificationSerializer(EmailToUserSerializer): ...
+class SendEmailVerificationSerializer(EmailToUserSerializer):
+    """Serializer for sending email verification."""
 
 
 class EmailConfirmSerializer(EmailToUserSerializer):
+    """Serializer for email confirmation with token."""
+
     token = serializers.CharField()
 
 
 class UserLoginSerializer(serializers.Serializer):
+    """Serializer for user login credentials."""
+
     email = serializers.EmailField()
     password = serializers.CharField(style={'input_type': 'password'})
 
 
 class TokenSerializer(serializers.Serializer):
+    """Serializer for token response."""
+
     token = serializers.CharField(source='key')
 
 
 class ContactSerializer(serializers.ModelSerializer):
+    """Serializer for Contact model."""
+
     class Meta:
         model = Contact
         fields = (
@@ -126,10 +139,14 @@ class ContactSerializer(serializers.ModelSerializer):
 
 
 class IdSerializer(serializers.Serializer):
+    """Serializer for single ID input."""
+
     id = serializers.IntegerField()
 
 
 class ItemsSerializer(serializers.Serializer):
+    """Serializer for comma-separated list of item IDs."""
+
     items = serializers.CharField(required=False, default='')
 
     def validate_items(self, value: str) -> list[int]:

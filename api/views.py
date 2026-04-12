@@ -40,6 +40,8 @@ logger = logging.getLogger(__name__)
 
 
 class UserRegisterView(CreateAPIView):
+    """View for user registration."""
+
     serializer_class = UserSerializer
 
     @override
@@ -50,6 +52,8 @@ class UserRegisterView(CreateAPIView):
 
 
 class SendEmailVerificationView(APIView):
+    """View for sending email verification."""
+
     serializer_class = SendEmailVerificationSerializer
 
     def post(self, request: Request) -> Response:
@@ -67,6 +71,8 @@ class SendEmailVerificationView(APIView):
 
 
 class EmailConfirmView(APIView):
+    """View for confirming email with token."""
+
     serializer_class = EmailConfirmSerializer
 
     def post(self, request: Request) -> Response:
@@ -92,6 +98,8 @@ class EmailConfirmView(APIView):
 
 
 class UserLoginView(APIView):
+    """View for user authentication and creating login tokens."""
+
     serializer_class = UserLoginSerializer
 
     def post(self, request: Request) -> Response:
@@ -120,6 +128,8 @@ class UserLoginView(APIView):
 
 
 class UserInfoView(RetrieveUpdateAPIView):
+    """View for user personal info management."""
+
     serializer_class = UserSerializer
     permission_classes = (IsAuthenticated,)
 
@@ -136,6 +146,8 @@ class UserInfoView(RetrieveUpdateAPIView):
 
 
 class UserContactsView(ListCreateAPIView, UpdateAPIView):
+    """View for managing user contacts."""
+
     queryset = Contact.objects
     serializer_class = ContactSerializer
     permission_classes = (IsAuthenticated,)

@@ -48,6 +48,8 @@ class User(AbstractUser):
 
 
 class Token(BaseToken):
+    """Customized token model with many-to-one user relationship."""
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -64,6 +66,8 @@ class Token(BaseToken):
 
 
 class Contact(models.Model):
+    """Contact model for user addresses."""
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
