@@ -4,6 +4,7 @@ from .views import EmailConfirmView
 from .views import PasswordResetConfirmView
 from .views import SendEmailVerificationView
 from .views import SendPasswordResetView
+from .views import ShopUpdateView
 from .views import UserContactsView
 from .views import UserInfoView
 from .views import UserLoginView
@@ -26,4 +27,5 @@ urlpatterns = [
     path('user/login', UserLoginView.as_view()),
     path('user/details', UserInfoView.as_view()),
     path('user/contact', UserContactsView.as_view()),
+    path('partner/update', ShopUpdateView.as_view()),
 ]

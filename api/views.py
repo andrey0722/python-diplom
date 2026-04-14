@@ -6,6 +6,7 @@ from django.contrib.auth.signals import user_logged_in
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
+import httpx
 from rest_framework import status
 from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
@@ -21,6 +22,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
+from .exceptions import ShopUrlLoadError
 from .exceptions import TokenConfirmError
 from .models import Contact
 from .models import Token
@@ -32,13 +34,16 @@ from .serializers import ItemsSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import SendEmailVerificationSerializer
 from .serializers import SendPasswordResetSerializer
+from .serializers import ShopUpdateURLSerializer
 from .serializers import TokenSerializer
 from .serializers import UserLoginSerializer
 from .serializers import UserSerializer
 from .services import check_email_verify_token
 from .services import check_password_reset_token
+from .services import retry_get_url
 from .services import send_email_verification_mail
 from .services import send_password_reset_mail
+from .services import update_shop_pricing_yaml
 from .services import validate_data
 from .services import validate_request
 
@@ -242,3 +247,29 @@ class UserContactsView(ListCreateAPIView, UpdateAPIView):
         """Read a list of item IDs from request data."""
         data = validate_request(ItemsSerializer, self)
         return data['items']
+
+
+class ShopUpdateView(APIView):
+    """View for updating a shop's pricing catalog from a provided URL."""
+
+    serializer_class = ShopUpdateURLSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request: Request) -> Response:
+        """Validate the incoming URL and apply shop pricing."""
+        data = validate_data(self.serializer_class, request.data)
+        url: str = data['url']
+        pricing = self.load_shop_pricing(url)
+        update_shop_pricing_yaml(request.user, url, pricing)
+        return Response(_('Shop data updated.'))
+
+    def load_shop_pricing(self, url: str) -> str:
+        """Fetch the shop pricing document from the URL."""
+        try:
+            response = retry_get_url(url)
+        except httpx.RequestError as e:
+            logger.exception('Shop URL connect error')
+            raise ShopUrlLoadError from e
+        if not response.is_success:
+            raise ShopUrlLoadError
+        return response.text

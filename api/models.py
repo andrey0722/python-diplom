@@ -1,4 +1,4 @@
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager as BaseUserManager
@@ -8,6 +8,9 @@ from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 from rest_framework.authtoken.models import Token as BaseToken
+
+if TYPE_CHECKING:
+    from django.db.models.manager import RelatedManager
 
 
 def unique_ignore_case(model: type[models.Model] | str, *fields: str):
@@ -192,6 +195,9 @@ class Shop(models.Model):
     name = models.CharField(_('shop name'), max_length=80)
     url = models.URLField(_('update url'), blank=True)
     is_active = models.BooleanField(_('active'), default=True)
+
+    if TYPE_CHECKING:
+        offers: RelatedManager['ShopOffer']
 
     class Meta:
         verbose_name = _('shop')

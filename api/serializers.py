@@ -18,6 +18,13 @@ class PasswordField(serializers.CharField):
         )
 
 
+class PositiveIntField(serializers.IntegerField):
+    """Integer field that only accepts values greater than zero."""
+
+    def __init__(self, **kwargs):
+        super().__init__(min_value=1, **kwargs)
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model with password handling."""
 
@@ -184,3 +191,94 @@ class ItemsSerializer(serializers.Serializer):
         if not result:
             raise serializers.ValidationError(_('Empty number list.'))
         return result
+
+
+class PricingCategorySerializer(serializers.Serializer):
+    """Serializer for product category entries in shop pricing payloads."""
+
+    id = PositiveIntField()
+    name = serializers.CharField()
+
+
+class PricingProductSerializer(serializers.Serializer):
+    """Serializer for products listed in shop pricing uploads."""
+
+    id = PositiveIntField(source='part_number')
+    category = PositiveIntField()
+    model = serializers.CharField()
+    name = serializers.CharField()
+    price = PositiveIntField()
+    price_rrc = PositiveIntField(source='msrp')
+    quantity = PositiveIntField()
+    parameters = serializers.DictField()
+
+
+class ShopPricingSerializer(serializers.Serializer):
+    """Serializer for shop pricing documents submitted by shop owners."""
+
+    shop = serializers.CharField()
+    categories = serializers.ListField(child=PricingCategorySerializer())
+    goods = serializers.ListField(child=PricingProductSerializer())
+
+    type DictList = list[dict[str, object]]
+
+    def validate_categories(self, value: DictList) -> DictList:
+        """Validate the categories list contains unique IDs."""
+        return self._validate_unique(value)
+
+    def validate_goods(self, value: DictList) -> DictList:
+        """Validate goods entries using unique part numbers."""
+        return self._validate_unique(value, 'part_number')
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Validate goods -> category references."""
+        goods_errors = {}
+        category_ids = {category['id'] for category in attrs['categories']}
+
+        for index, product in enumerate(attrs['goods']):
+            item_errors = {}
+            category_id = product['category']
+
+            if category_id not in category_ids:
+                item_errors['category'] = {
+                    'error': _('Invalid category reference'),
+                    'value': category_id,
+                }
+
+            if item_errors:
+                goods_errors[index] = item_errors
+
+        if goods_errors:
+            raise serializers.ValidationError({'goods': goods_errors})
+        return super().validate(attrs)
+
+    @staticmethod
+    def _validate_unique(value: DictList, field_name: str = 'id') -> DictList:
+        """Ensure list items are unique by the given field."""
+        found_ids = set()
+        errors = {}
+
+        for index, item in enumerate(value):
+            item_errors = {}
+            item_id = item[field_name]
+
+            if item_id in found_ids:
+                item_errors[field_name] = {
+                    'error': _('Duplicate item id'),
+                    'value': item_id,
+                }
+
+            found_ids.add(item_id)
+
+            if item_errors:
+                errors[index] = item_errors
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return value
+
+
+class ShopUpdateURLSerializer(serializers.Serializer):
+    """Serializer for shop pricing update requests via URL."""
+
+    url = serializers.URLField()

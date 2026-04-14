@@ -1,3 +1,4 @@
+import functools
 import json
 import logging
 from typing import Any, cast, override
@@ -6,15 +7,28 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import send_mail
+from django.db import DatabaseError
+from django.db import transaction
+from django.db.models import Model
 from django.http import HttpRequest
 from django.template.loader import render_to_string
+import httpx
 from rest_framework.request import Request
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
+import yaml
 
+from .exceptions import ShopUpdateError
+from .models import Category
+from .models import Parameter
+from .models import Product
+from .models import ProductParameter
+from .models import Shop
+from .models import ShopOffer
 from .models import User
 from .serializers import EmailConfirmSerializer
 from .serializers import PasswordResetConfirmSerializer
+from .serializers import ShopPricingSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +99,63 @@ def get_validated_data(serializer: BaseSerializer) -> dict[str, Any]:
         dict[str, Any]: The validated data.
     """
     return cast(dict[str, Any], serializer.validated_data)
+
+
+@functools.cache
+def get_model_fields(cls: type[Model]) -> set[str]:
+    """Return a set of field names defined on a Django model class."""
+    return {field.name for field in cls._meta.fields}
+
+
+def filter_by_fields(
+    cls: type[Model],
+    data: dict[str, object],
+) -> dict[str, object]:
+    """Filter data keys that are model field names."""
+    fields = get_model_fields(cls)
+    return {field: value for field, value in data.items() if field in fields}
+
+
+def create_model[T: Model](
+    cls: type[T],
+    data: dict[str, object] | None = None,
+    **kwargs: object,
+) -> T:
+    """Create a model instance using data filtered to model fields.
+
+    Args:
+        cls (type[T]): The Django model class.
+        data (dict[str, object] | None): Data to use for creation.
+        kwargs (object): Additional model field values.
+
+    Returns:
+        T: The created model instance.
+    """
+    data = data or {}
+    data |= kwargs
+    data = filter_by_fields(cls, data)
+    return cls.objects.create(**data)
+
+
+def get_or_create_model[T: Model](
+    cls: type[T],
+    defaults: dict[str, object] | None = None,
+    **kwargs: object,
+) -> T:
+    """Get a model instance or create a new one if not exists.
+
+    Args:
+        cls (type[T]): The Django model class.
+        defaults (dict[str, object] | None): Default values for creation.
+        kwargs (object): Lookup fields for existing model instance.
+
+    Returns:
+        T: The retrieved or newly created model instance.
+    """
+    defaults = defaults and filter_by_fields(cls, defaults)
+    kwargs = filter_by_fields(cls, kwargs)
+    item, _ = cls.objects.get_or_create(defaults=defaults, **kwargs)
+    return item
 
 
 class TokenGenerator(PasswordResetTokenGenerator):
@@ -319,4 +390,96 @@ def render_and_send_mail(  # noqa: PLR0913
             html_message=html,
         )
     except Exception:
-        logger.exception('Failed to send email to user %s', context['user'].pk)
+        logger.exception('Failed to send email to user %s', to_email)
+
+
+def retry_get_url(url: str, retries: int = 10) -> httpx.Response:
+    """Retry an HTTP GET request no more than `retries` times.
+
+    Args:
+        url (str): The URL to request.
+        retries (int): Number of retry attempts before failing.
+
+    Returns:
+        httpx.Response: The successful HTTP response.
+    """
+    with httpx.Client() as session:
+        fail_count = 0
+        while True:
+            try:
+                response = session.get(url)
+            except httpx.RequestError:
+                fail_count += 1
+                if fail_count >= retries:
+                    raise
+            else:
+                return response
+
+
+def update_shop_pricing_yaml(user: User, url: str, content: str):
+    """Update shop pricing from YAML document.
+
+    Args:
+        user (User): The shop owner.
+        url (str): The pricing document URL.
+        content (str): The YAML document.
+    """
+    data = yaml.safe_load(content)
+    update_shop_pricing(user, url, data)
+
+
+def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
+    """Apply shop pricing from processed input data.
+
+    Args:
+        user (User): The shop owner.
+        url (str): Pricing document URL.
+        data (dict[str, Any]): Parsed pricing data.
+    """
+    data = validate_data(ShopPricingSerializer, data)
+    try:
+        _update_shop_pricing_impl(user, url, data)
+    except DatabaseError as e:
+        logger.exception('Shop update error: %s', url)
+        raise ShopUpdateError from e
+
+
+@transaction.atomic
+def _update_shop_pricing_impl(
+    user: User,
+    url: str,
+    data: dict[str, Any],
+) -> None:
+    """Apply shop pricing from validated data.
+
+    Args:
+        user (User): The shop owner.
+        url (str): Pricing document URL.
+        data (dict[str, Any]): Validated shop pricing payload.
+    """
+    shop = get_or_create_model(Shop, data, name=data['shop'], user=user)
+    shop.url = url
+    shop.save()
+
+    # Use category IDs from document for in-document mapping only
+    categories = {
+        item['id']: get_or_create_model(Category, name=item['name'])
+        for item in data['categories']
+    }
+
+    # Clear all shop offers but reuse product records
+    shop.offers.all().delete()
+
+    for item in data['goods']:
+        item['category'] = categories[item['category']]
+        product = get_or_create_model(Product, item, name=item['name'])
+        offer = create_model(ShopOffer, item, product=product, shop=shop)
+
+        for name, value in item['parameters'].items():
+            parameter = get_or_create_model(Parameter, name=name)
+            create_model(
+                ProductParameter,
+                parameter=parameter,
+                offer=offer,
+                value=value,
+            )
