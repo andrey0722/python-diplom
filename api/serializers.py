@@ -1,5 +1,8 @@
 from typing import Any, override
+from urllib.parse import urlsplit
 
+from django.conf import settings
+from django.core.validators import URLValidator
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
@@ -278,7 +281,43 @@ class ShopPricingSerializer(serializers.Serializer):
         return value
 
 
+if settings.DEBUG:
+
+    class DebugURLValidator(URLValidator):
+        """URL validator that accepts also local file URLs."""
+
+        @override
+        def __call__(self, value: str | None) -> None:
+            parts = urlsplit(value or '')
+            scheme = parts.scheme.lower()
+            if scheme == 'file':
+                return self._validate_file_url(parts)
+            return super().__call__(value)
+
+        def _validate_file_url(self, parts):
+            """Validate a local file URL."""
+            if parts.netloc or not parts.path:
+                # pass
+                raise serializers.ValidationError(self.message)
+
+    URLValidator = DebugURLValidator
+
+
+class URLField(serializers.CharField):
+    """Validates input URL strings."""
+
+    default_error_messages = {
+        'invalid': _('Enter a valid URL.'),
+    }
+
+    def __init__(self, **kwargs):
+        """Initialize URLField instance."""
+        super().__init__(**kwargs)
+        validator = URLValidator(message=self.error_messages['invalid'])
+        self.validators.append(validator)
+
+
 class ShopUpdateURLSerializer(serializers.Serializer):
     """Serializer for shop pricing update requests via URL."""
 
-    url = serializers.URLField()
+    url = URLField()

@@ -1,8 +1,13 @@
+from collections.abc import Callable
 import functools
 import json
 import logging
-from typing import Any, cast, override
+from pathlib import Path
+from typing import Any, Concatenate, cast, override
+from urllib.parse import unquote
+from urllib.parse import urlparse
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.contrib.sites.shortcuts import get_current_site
@@ -393,6 +398,44 @@ def render_and_send_mail(  # noqa: PLR0913
         logger.exception('Failed to send email to user %s', to_email)
 
 
+def debug_process_file_url[**P](
+    func: Callable[Concatenate[str, P], httpx.Response],
+) -> Callable[Concatenate[str, P], httpx.Response]:
+    """Allow local file URL processing in DEBUG mode only."""
+    if not settings.DEBUG:
+        # No wrapping
+        return func
+
+    @functools.wraps(func)
+    def wrapper(url: str, *args: Any, **kwargs: Any) -> httpx.Response:
+        """Adds local file URL support."""
+        parts = urlparse(url)
+        if parts.scheme != 'file':
+            return func(url, *args, **kwargs)
+
+        path = unquote(parts.path)
+
+        # Convert Windows absolute paths with drive letter
+        if path.startswith('/') and len(path) >= 3 and path[2] == ':':
+            path = path[1:]
+
+        path = Path(path)
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return httpx.Response(404, text='File not found')
+        except OSError as exc:
+            return httpx.Response(500, text=str(exc))
+        return httpx.Response(
+            200,
+            content=content,
+            headers={'content-length': str(len(content))},
+        )
+
+    return wrapper
+
+
+@debug_process_file_url
 def retry_get_url(url: str, retries: int = 10) -> httpx.Response:
     """Retry an HTTP GET request no more than `retries` times.
 
