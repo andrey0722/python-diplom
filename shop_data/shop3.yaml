@@ -1,0 +1,312 @@
+shop: DNS
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 31
+    name: Наушники
+  - id: 33
+    name: Фотоаппараты
+  - id: 34
+    name: Мониторы
+  - id: 35
+    name: Смарт-часы
+  - id: 36
+    name: Зарядные устройства
+
+goods:
+  - id: 4216292
+    category: 224
+    model: apple/iphone/xs-max
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 89000
+    price_rrc: 99990
+    quantity: 6
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Защита от воды": IP68
+  - id: 4672670
+    category: 224
+    model: apple/iphone/xr
+    name: Смартфон Apple iPhone XR 128GB (синий)
+    price: 52000
+    price_rrc: 59990
+    quantity: 10
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": синий
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+  - id: 7001001
+    category: 224
+    model: google/pixel-7-pro
+    name: Смартфон Google Pixel 7 Pro 256GB (obsidian)
+    price: 78000
+    price_rrc: 88990
+    quantity: 7
+    parameters:
+      "Диагональ (дюйм)": 6.7
+      "Разрешение (пикс)": 3120x1440
+      "Встроенная память (Гб)": 256
+      "Цвет": obsidian
+      "Поддержка 5G": да
+      "Аккумулятор (мАч)": 5003
+      "Защита от воды": IP68
+  - id: 7001002
+    category: 224
+    model: oneplus/11-pro
+    name: OnePlus 11 Pro 256GB (hasselblad silver)
+    price: 72000
+    price_rrc: 81990
+    quantity: 9
+    parameters:
+      "Screen Size (inches)": 6.7
+      "Resolution (pixels)": 3216x1440
+      "Internal Memory (GB)": 256
+      "Color": hasselblad silver
+      "5G Support": true
+      "Battery (mAh)": 5000
+      "Water Resistance": IP68
+  - id: 1235464569
+    category: 1
+    model: sandisk/ultra-flair-64gb
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1600
+    price_rrc: 1990
+    quantity: 20
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Warranty (years)": 5
+  - id: 1235434570
+    category: 1
+    model: kingston/datatraveler-32gb
+    name: USB Flash Drive Kingston DataTraveler 32GB (red)
+    price: 895
+    price_rrc: 1199
+    quantity: 15
+    parameters:
+      "Capacity (GB)": 32
+      "Color": red
+      "Speed (MB/s)": 100
+      "Warranty (years)": 5
+  - id: 7001003
+    category: 1
+    model: samsung/bar-plus-256gb
+    name: Samsung Bar Plus 256GB USB 3.1 (gold)
+    price: 4500
+    price_rrc: 5490
+    quantity: 8
+    parameters:
+      "Capacity (GB)": 256
+      "Color": gold
+      "Speed (MB/s)": 400
+      "Warranty (years)": 5
+  - id: 7002001
+    category: 31
+    model: beats/studio-pro
+    name: Beats Studio Pro (deep brown)
+    price: 32000
+    price_rrc: 34990
+    quantity: 9
+    parameters:
+      "Color": deep brown
+      "Noise Cancellation": true
+      "Battery Life (hours)": 40
+      "Connection": Bluetooth 5.3
+      "Driver Size (mm)": 40
+  - id: 7002002
+    category: 31
+    model: bose/quietcomfort-ultra
+    name: Bose QuietComfort Ultra (dark blue)
+    price: 42000
+    price_rrc: 47990
+    quantity: 5
+    parameters:
+      "Color": dark blue
+      "Noise Cancellation": true
+      "Battery Life (hours)": 24
+      "Connection": Bluetooth 5.3
+      "Driver Size (mm)": 40
+  - id: 7002003
+    category: 31
+    model: audio-technica/ath-m40x
+    name: Audio-Technica ATH-M40x (black)
+    price: 8500
+    price_rrc: 10990
+    quantity: 14
+    parameters:
+      "Color": black
+      "Noise Cancellation": false
+      "Battery Life (hours)": проводные
+      "Connection": 3.5mm Jack
+      "Driver Size (mm)": 40
+  - id: 7003001
+    category: 33
+    model: fujifilm/x-t5
+    name: Fujifilm X-T5 18-55mm Kit (silver)
+    price: 145000
+    price_rrc: 164990
+    quantity: 4
+    parameters:
+      "Sensor": APS-C
+      "Resolution (pixels)": 4000x2668
+      "Color": silver
+      "ISO Range": 160-12800
+      "Shutter Speed (sec)": 1/8000
+      "Video": 4K 60fps
+  - id: 7003002
+    category: 33
+    model: olympus/om-system-om-1
+    name: Olympus OM System OM-1 12-45mm Kit (black)
+    price: 125000
+    price_rrc: 142990
+    quantity: 3
+    parameters:
+      "Матрица": Four Thirds
+      "Разрешение (пикс)": 4080x2720
+      "Цвет": черный
+      "Диапазон ISO": 100-25600
+      "Скорость затвора (сек)": 1/8000
+      "Видео": 4K 120fps
+  - id: 7003003
+    category: 33
+    model: panasonic/lumix-s5ii
+    name: Panasonic Lumix S5 II 20-60mm Kit (black)
+    price: 185000
+    price_rrc: 209990
+    quantity: 2
+    parameters:
+      "Sensor": Full Frame
+      "Resolution (pixels)": 4712x3118
+      "Color": black
+      "ISO Range": 100-51200
+      "Shutter Speed (sec)": 1/8000
+      "Video": 4K 60fps
+  - id: 7004001
+    category: 34
+    model: lg/27up550
+    name: LG 27UP550 27" 4K UHD Monitor
+    price: 35000
+    price_rrc: 39990
+    quantity: 6
+    parameters:
+      "Screen Size (inches)": 27.0
+      "Resolution (pixels)": 3840x2160
+      "Refresh Rate (Hz)": 60
+      "Panel Type": IPS
+      "Response Time (ms)": 5
+  - id: 7004002
+    category: 34
+    model: dell/s4721dgf
+    name: Монитор Dell S4721DGF 47" Curved Gaming
+    price: 118000
+    price_rrc: 134990
+    quantity: 3
+    parameters:
+      "Диагональ (дюйм)": 47.0
+      "Разрешение (пикс)": 5120x1440
+      "Частота обновления (Hz)": 120
+      "Тип панели": VA
+      "Время отклика (мс)": 4
+  - id: 7004003
+    category: 34
+    model: asus/proart-pa279cv
+    name: ASUS ProArt PA279CV 27" RGB Monitor
+    price: 52000
+    price_rrc: 59990
+    quantity: 8
+    parameters:
+      "Screen Size (inches)": 27.0
+      "Resolution (pixels)": 2560x1440
+      "Refresh Rate (Hz)": 60
+      "Panel Type": IPS
+      "Response Time (ms)": 7
+  - id: 7005001
+    category: 35
+    model: apple/watch-series-8
+    name: Apple Watch Series 8 41mm (midnight)
+    price: 42000
+    price_rrc: 49990
+    quantity: 11
+    parameters:
+      "Screen Size (inches)": 1.9
+      "Resolution (pixels)": 352x430
+      "Color": midnight
+      "Operating System": watchOS
+      "Battery Life (hours)": 18
+      "Water Resistance": 50m
+  - id: 7005002
+    category: 35
+    model: samsung/galaxy-watch5-pro
+    name: Samsung Galaxy Watch 5 Pro 45mm (titanium)
+    price: 38000
+    price_rrc: 44990
+    quantity: 9
+    parameters:
+      "Screen Size (inches)": 1.4
+      "Resolution (pixels)": 480x480
+      "Color": titanium
+      "Operating System": Wear OS
+      "Battery Life (hours)": 48
+      "Water Resistance": 100m
+  - id: 7005003
+    category: 35
+    model: garmin/epix-gen-2
+    name: Garmin epix Gen 2 (black)
+    price: 45000
+    price_rrc: 51990
+    quantity: 7
+    parameters:
+      "Screen Size (inches)": 1.3
+      "Resolution (pixels)": 454x454
+      "Color": black
+      "Operating System": Garmin OS
+      "Battery Life (hours)": 336
+      "Water Resistance": 100m
+  - id: 7006001
+    category: 36
+    model: belkin/boost-pd-65w
+    name: Belkin Boost Charge Pro 65W USB-C Charger
+    price: 5500
+    price_rrc: 6990
+    quantity: 25
+    parameters:
+      "Power (W)": 65
+      "Connections": 2x USB-C
+      "Technology": GaN
+      "Safety Certification": UL + FCC
+  - id: 7006002
+    category: 36
+    model: anker/737-charging-station
+    name: Anker 737 Charging Station (Prime 100W 6-port)
+    price: 8500
+    price_rrc: 10990
+    quantity: 12
+    parameters:
+      "Мощность (Вт)": 100
+      "Разъемы": 2x USB-C + 4x USB-A
+      "Технология": PowerIQ 3.0
+      "Безопасность": MFi + FCC
+  - id: 7006003
+    category: 36
+    model: mophie/speedport-pd-65w
+    name: mophie SpeedPort 65W USB-C Power Adapter
+    price: 6500
+    price_rrc: 7990
+    quantity: 18
+    parameters:
+      "Power (W)": 65
+      "Connections": 1x USB-C
+      "Technology": PD 3.0
+      "Safety Certification": CE + FCC

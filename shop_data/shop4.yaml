@@ -1,0 +1,335 @@
+shop: Ситилинк
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 33
+    name: Фотоаппараты
+  - id: 31
+    name: Наушники
+  - id: 37
+    name: Портативная акустика
+  - id: 38
+    name: Микрофоны
+  - id: 39
+    name: Видеокамеры
+  - id: 40
+    name: SSD диски
+
+goods:
+  - id: 4216292
+    category: 224
+    model: apple/iphone/xs-max
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 76000
+    price_rrc: 87990
+    quantity: 5
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Защита от воды": IP68
+      "Вес (г)": 204
+  - id: 1235434570
+    category: 1
+    model: kingston/datatraveler-32gb
+    name: USB Flash Drive Kingston DataTraveler 32GB (red)
+    price: 750
+    price_rrc: 999
+    quantity: 22
+    parameters:
+      "Capacity (GB)": 32
+      "Color": red
+      "Speed (MB/s)": 100
+      "Warranty (years)": 5
+      "Interface": USB 3.2
+  - id: 6005002
+    category: 33
+    model: sony/alpha-a6400
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 78000
+    price_rrc: 89990
+    quantity: 4
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Вес (г)": 565
+  - id: 8001001
+    category: 224
+    model: motorola/edge-50-pro
+    name: Смартфон Motorola Edge 50 Pro 256GB (midnight blue)
+    price: 68000
+    price_rrc: 77990
+    quantity: 8
+    parameters:
+      "Диагональ (дюйм)": 6.7
+      "Разрешение (пикс)": 2400x1080
+      "Встроенная память (Гб)": 256
+      "Цвет": midnight blue
+      "Поддержка 5G": да
+      "Аккумулятор (мАч)": 5000
+      "Защита от воды": IP68
+      "Вес (г)": 196
+  - id: 8001002
+    category: 224
+    model: samsung/galaxy-s24-ultra
+    name: Смартфон Samsung Galaxy S24 Ultra 1TB (titanium gray)
+    price: 145000
+    price_rrc: 164990
+    quantity: 3
+    parameters:
+      "Диагональ (дюйм)": 6.8
+      "Разрешение (пикс)": 3120x1440
+      "Встроенная память (Гб)": 1000
+      "Цвет": titanium gray
+      "Поддержка 5G": да
+      "Аккумулятор (мАч)": 5000
+      "Защита от воды": IP68
+      "Вес (г)": 218
+  - id: 8001003
+    category: 1
+    model: transcend/jetflash-930c
+    name: USB Flash Drive Transcend JetFlash 930C 256GB (black)
+    price: 3800
+    price_rrc: 4990
+    quantity: 14
+    parameters:
+      "Capacity (GB)": 256
+      "Color": black
+      "Speed (MB/s)": 420
+      "Warranty (years)": 5
+      "Interface": USB 3.2
+  - id: 8001004
+    category: 1
+    model: western-digital/sandisk-extreme-pro-1tb
+    name: SanDisk Extreme Pro microSD 1TB (silver)
+    price: 18000
+    price_rrc: 22990
+    quantity: 6
+    parameters:
+      "Capacity (GB)": 1000
+      "Color": silver
+      "Speed (MB/s)": 200
+      "Warranty (years)": 10
+      "Interface": microSD UHS-II
+  - id: 8002001
+    category: 31
+    model: sony/linkbuds-s
+    name: Sony LinkBuds S (purple)
+    price: 15000
+    price_rrc: 18990
+    quantity: 13
+    parameters:
+      "Color": purple
+      "Noise Cancellation": true
+      "Battery Life (hours)": 12
+      "Connection": Bluetooth 5.3
+      "Driver Size (mm)": 5.9
+  - id: 8002002
+    category: 31
+    model: apple/airpods-pro-2
+    name: Apple AirPods Pro 2nd Generation (white)
+    price: 22000
+    price_rrc: 26990
+    quantity: 17
+    parameters:
+      "Color": white
+      "Noise Cancellation": true
+      "Battery Life (hours)": 6
+      "Connection": Bluetooth 5.3
+      "Driver Size (mm)": 8
+  - id: 8003001
+    category: 37
+    model: jbl/charge-5-pro
+    name: JBL Charge 5 Pro (gray)
+    price: 18000
+    price_rrc: 21990
+    quantity: 11
+    parameters:
+      "Color": gray
+      "Power (W)": 60
+      "Battery Life (hours)": 24
+      "Connection": Bluetooth 5.3
+      "Water Resistance": IPX7
+  - id: 8003002
+    category: 37
+    model: marshall/stanmore-iii
+    name: Marshall Stanmore III (black)
+    price: 35000
+    price_rrc: 41990
+    quantity: 7
+    parameters:
+      "Цвет": черный
+      "Мощность (Вт)": 80
+      "Время работы (часы)": 20
+      "Подключение": Bluetooth 5.3
+      "Водостойкость": IPX4
+  - id: 8003003
+    category: 37
+    model: ultimate-ears/boom-3
+    name: Ultimate Ears BOOM 3 (red)
+    price: 12000
+    price_rrc: 14990
+    quantity: 19
+    parameters:
+      "Color": red
+      "Power (W)": 20
+      "Battery Life (hours)": 15
+      "Connection": Bluetooth 5.0
+      "Water Resistance": IPX7
+  - id: 8004001
+    category: 38
+    model: shure/sm7b
+    name: Shure SM7B Studio Microphone (black)
+    price: 42000
+    price_rrc: 51990
+    quantity: 4
+    parameters:
+      "Color": black
+      "Type": Dynamic
+      "Frequency Response": 50-16000 Hz
+      "Output Impedance": 310 Ohms
+      "Polar Pattern": Cardioid
+  - id: 8004002
+    category: 38
+    model: rode/nt1-signature-series
+    name: RODE NT1 Signature Series (gold)
+    price: 28000
+    price_rrc: 33990
+    quantity: 8
+    parameters:
+      "Цвет": золотистый
+      "Тип": Конденсаторный
+      "Диапазон частот": 20-20000 Hz
+      "Выходной импеданс": 132 Ohms
+      "Полярная диаграмма": Кардиоидная
+  - id: 8004003
+    category: 38
+    model: blue/yeti-nano
+    name: Blue Yeti Nano (white)
+    price: 8500
+    price_rrc: 9990
+    quantity: 24
+    parameters:
+      "Color": white
+      "Type": Condenser
+      "Frequency Response": 20-20000 Hz
+      "Output Impedance": 16 Ohms
+      "Polar Pattern": Cardioid / Omnidirectional
+  - id: 8005001
+    category: 39
+    model: gopro/hero12-black
+    name: GoPro Hero 12 Black Action Camera
+    price: 55000
+    price_rrc: 64990
+    quantity: 9
+    parameters:
+      "Разрешение (пикс)": 5472x3078
+      "Видео": 5.3K 60fps
+      "Сенсор": CMOS
+      "Диапазон ISO": 100-6400
+      "Частота кадров": 240 fps (1080p)
+      "Водостойкость": 33m
+  - id: 8005002
+    category: 39
+    model: dji/osmo-action-4
+    name: DJI Osmo Action 4 Adventure Combo
+    price: 48000
+    price_rrc: 56990
+    quantity: 6
+    parameters:
+      "Resolution (pixels)": 4096x2160
+      "Video": 4K 120fps
+      "Sensor": CMOS
+      "ISO Range": 100-3200
+      "Frame Rate": 240 fps (1080p)
+      "Water Resistance": 16m
+  - id: 8005003
+    category: 39
+    model: insta360/x4
+    name: Insta360 X4 360-Degree Camera
+    price: 62000
+    price_rrc: 71990
+    quantity: 3
+    parameters:
+      "Разрешение (пикс)": 8192x4096
+      "Видео": 8K 30fps
+      "Сенсор": CMOS Dual
+      "Диапазон ISO": 100-6400
+      "Частота кадров": 120 fps (4K)
+      "Водостойкость": 10m
+  - id: 8006001
+    category: 33
+    model: nikon/z8
+    name: Nikon Z8 Mirrorless Camera (black)
+    price: 550000
+    price_rrc: 649990
+    quantity: 1
+    parameters:
+      "Матрица": Full Frame
+      "Разрешение (пикс)": 8256x5504
+      "Цвет": черный
+      "Диапазон ISO": 100-102400
+      "Скорость затвора (сек)": 1/8000
+      "Видео": 8K 60fps
+  - id: 8006002
+    category: 33
+    model: pentax/k-3-mark-iii
+    name: Pentax K-3 Mark III DSLR (silver)
+    price: 145000
+    price_rrc: 164990
+    quantity: 2
+    parameters:
+      "Sensor": APS-C
+      "Resolution (pixels)": 5472x3648
+      "Color": silver
+      "ISO Range": 100-102400
+      "Shutter Speed (sec)": 1/8000
+      "Video": 4K 60fps
+  - id: 8007001
+    category: 40
+    model: samsung/980-pro-4tb
+    name: Samsung 980 PRO 4TB NVMe SSD
+    price: 35000
+    price_rrc: 42990
+    quantity: 11
+    parameters:
+      "Capacity (GB)": 4000
+      "Interface": NVMe M.2
+      "Speed (MB/s)": 7100
+      "Form Factor": M.2 2280
+      "Warranty (years)": 5
+  - id: 8007002
+    category: 40
+    model: crucial/p5-plus-1tb
+    name: Crucial P5 Plus 1TB SSD (black)
+    price: 8500
+    price_rrc: 10490
+    quantity: 19
+    parameters:
+      "Capacity (GB)": 1000
+      "Interface": NVMe M.2
+      "Speed (MB/s)": 6600
+      "Form Factor": M.2 2280
+      "Warranty (years)": 5
+  - id: 8007003
+    category: 40
+    model: western-digital/black-sn850x-2tb
+    name: Western Digital Black SN850X 2TB (black)
+    price: 18000
+    price_rrc: 22490
+    quantity: 13
+    parameters:
+      "Capacity (GB)": 2000
+      "Interface": NVMe M.2
+      "Speed (MB/s)": 7100
+      "Form Factor": M.2 2280
+      "Warranty (years)": 5
