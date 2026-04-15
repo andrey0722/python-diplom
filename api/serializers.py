@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from .models import Contact
+from .models import Shop
 from .models import User
 
 
@@ -321,3 +322,14 @@ class ShopUpdateURLSerializer(serializers.Serializer):
     """Serializer for shop pricing update requests via URL."""
 
     url = URLField()
+
+
+class ShopStateSerializer(serializers.ModelSerializer):
+    """Serializer for Shop model."""
+
+    state = serializers.BooleanField(source='is_active')
+
+    class Meta:
+        model = Shop
+        fields = ('id', 'name', 'state')
+        read_only_fields = ('id', 'name')

@@ -13,8 +13,10 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import CreateAPIView
 from rest_framework.generics import GenericAPIView
 from rest_framework.generics import ListCreateAPIView
-from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.generics import RetrieveAPIView
 from rest_framework.generics import UpdateAPIView
+from rest_framework.generics import get_object_or_404
+from rest_framework.mixins import UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -25,6 +27,7 @@ from .exceptions import MissingIdsError
 from .exceptions import ShopUrlLoadError
 from .exceptions import TokenConfirmError
 from .models import Contact
+from .models import Shop
 from .models import Token
 from .models import User
 from .serializers import ContactSerializer
@@ -34,6 +37,7 @@ from .serializers import ItemsSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import SendEmailVerificationSerializer
 from .serializers import SendPasswordResetSerializer
+from .serializers import ShopStateSerializer
 from .serializers import ShopUpdateURLSerializer
 from .serializers import TokenSerializer
 from .serializers import UserLoginSerializer
@@ -182,7 +186,7 @@ class UserLoginView(APIView):
         return Response(serializer.data)
 
 
-class UserInfoView(RetrieveUpdateAPIView):
+class UserInfoView(RetrieveAPIView, UpdateModelMixin):
     """View for user personal info management."""
 
     serializer_class = UserSerializer
@@ -196,8 +200,17 @@ class UserInfoView(RetrieveUpdateAPIView):
         return obj
 
     def post(self, request, *args, **kwargs):
-        """Allow  also POST request for updating user info."""
-        return self.patch(request, *args, **kwargs)
+        """Update user personal information.
+
+        Args:
+            request: The request object.
+            args: Additional positional arguments.
+            kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Updated user information.
+        """
+        return self.partial_update(request, *args, **kwargs)
 
 
 class UserContactsView(ListCreateAPIView, UpdateAPIView):
@@ -274,3 +287,32 @@ class ShopUpdateView(APIView):
         if not response.is_success:
             raise ShopUrlLoadError
         return response.text
+
+
+class ShopStateView(RetrieveAPIView, UpdateModelMixin):
+    """View for managing a shop's active state."""
+
+    queryset = Shop.objects
+    serializer_class = ShopStateSerializer
+    permission_classes = (IsAuthenticated,)
+
+    @override
+    def get_object(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Return the current authorized user's shop."""
+        user = self.request.user
+        obj = get_object_or_404(self.get_queryset(), user=user)
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    def post(self, request, *args, **kwargs):
+        """Update the shop active state.
+
+        Args:
+            request: The request object.
+            args: Additional positional arguments.
+            kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Updated shop state.
+        """
+        return self.partial_update(request, *args, **kwargs)
