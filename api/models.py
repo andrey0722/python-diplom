@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, override
 
+from django.contrib import admin
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager as BaseUserManager
 from django.db import models
@@ -128,6 +129,7 @@ class Contact(models.Model):
         return self.address
 
     @property
+    @admin.display(description=_('Address'))
     def address(self):
         """Return the formatted address string."""
         house_parts = (self.house, self.structure, self.building)
@@ -135,6 +137,7 @@ class Contact(models.Model):
         return f'{self.city}, {self.street} {house}, {self.apartment}'
 
     @property
+    @admin.display(description=_('Contact person'))
     def contact_person(self):
         """Return the contact person's full name."""
         name_parts = (self.first_name, self.middle_name, self.last_name)
@@ -142,6 +145,7 @@ class Contact(models.Model):
         return name or self.user.full_name
 
     @property
+    @admin.display(description=_('Contact email'))
     def contact_email(self) -> str:
         """Return the contact email, falling back to user's email."""
         return self.email or self.user.email
@@ -152,6 +156,9 @@ class Category(models.Model):
 
     name = models.CharField(_('category'), max_length=80)
 
+    if TYPE_CHECKING:
+        products: RelatedManager['Product']
+
     class Meta:
         verbose_name = _('category')
         verbose_name_plural = _('categories')
@@ -160,6 +167,11 @@ class Category(models.Model):
     def __str__(self) -> str:
         """Return the category name."""
         return self.name
+
+    @property
+    @admin.display(description=_('Products count'))
+    def products_count(self):
+        return self.products.count()
 
 
 class Product(models.Model):
@@ -173,6 +185,9 @@ class Product(models.Model):
         verbose_name=_('category'),
     )
 
+    if TYPE_CHECKING:
+        offers: RelatedManager['ShopOffer']
+
     class Meta:
         verbose_name = _('product')
         verbose_name_plural = _('products')
@@ -181,6 +196,11 @@ class Product(models.Model):
     def __str__(self) -> str:
         """Return the product name."""
         return self.name
+
+    @property
+    @admin.display(description=_('Offers count'))
+    def offers_count(self):
+        return self.offers.count()
 
 
 class Shop(models.Model):
@@ -251,8 +271,37 @@ class ShopOffer(models.Model):
         unique_together = ('shop', 'product', 'model')
 
     def __str__(self) -> str:
-        """Return a human-readable representation of the shop offer."""
-        return f'[{self.shop}] {self.product}: {self.price}'
+        """Return a human-readable representation of the shop offer.
+
+        Returns:
+            str: Formatted shop offer string.
+        """
+        return f'{self.product} │ {self.shop} │ {self.price}'
+
+    @property
+    @admin.display(description=_('Discount, %'))
+    def discount(self) -> int:
+        """Calculate the percentage discount from MSRP to current price.
+
+        Returns:
+            int: Discount percentage (0-100).
+        """
+        fraction = (self.msrp - self.price) / self.msrp if self.msrp else 0
+        return int(fraction * 100)
+
+    @property
+    @admin.display(
+        boolean=True,
+        description=_('Shop active'),
+        ordering='shop__is_active',
+    )
+    def shop_is_active(self) -> bool:
+        """Check if the offer's shop is active.
+
+        Returns:
+            bool: True if the associated shop is active.
+        """
+        return self.shop.is_active
 
 
 class ProductParameter(models.Model):
@@ -270,7 +319,7 @@ class ProductParameter(models.Model):
         related_name='parameters',
         verbose_name=_('offers'),
     )
-    value = models.CharField(_('product model'), max_length=120)
+    value = models.CharField(_('parameter value'), max_length=120)
 
     def __str__(self) -> str:
         """Return the product parameter and its value."""
