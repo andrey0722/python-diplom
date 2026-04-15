@@ -1,6 +1,22 @@
+from collections.abc import Iterable
+
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.exceptions import APIException
+from rest_framework.exceptions import NotFound
+
+
+class MissingIdsError(NotFound):
+    """Failed to find one or more requested item IDs."""
+
+    def __init__(self, missing_ids: Iterable[object], code: object = None):
+        detail = {
+            'detail': {
+                'error': _('One or more ids not found.'),
+                'input': list(missing_ids),
+            }
+        }
+        super().__init__(detail, code)
 
 
 class TokenConfirmError(APIException):

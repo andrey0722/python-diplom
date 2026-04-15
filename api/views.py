@@ -10,7 +10,6 @@ import httpx
 from rest_framework import status
 from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.exceptions import NotFound
 from rest_framework.generics import CreateAPIView
 from rest_framework.generics import GenericAPIView
 from rest_framework.generics import ListCreateAPIView
@@ -22,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
+from .exceptions import MissingIdsError
 from .exceptions import ShopUrlLoadError
 from .exceptions import TokenConfirmError
 from .models import Contact
@@ -231,10 +231,11 @@ class UserContactsView(ListCreateAPIView, UpdateAPIView):
     def delete(self, _request, *_args, **_kwargs):
         """Delete selected contacts by ID list."""
         item_ids = self._get_items()
-        queryset = self.queryset.filter(id__in=item_ids)
+        queryset = self.get_queryset().filter(id__in=item_ids)
         count = queryset.count()
         if count != len(item_ids):
-            raise NotFound
+            found_ids = set(queryset.values_list('id', flat=True))
+            raise MissingIdsError(item_ids - found_ids)
         queryset.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -243,10 +244,10 @@ class UserContactsView(ListCreateAPIView, UpdateAPIView):
         data = validate_request(IdSerializer, self)
         return data['id']
 
-    def _get_items(self) -> list[int]:
+    def _get_items(self) -> set[int]:
         """Read a list of item IDs from request data."""
         data = validate_request(ItemsSerializer, self)
-        return data['items']
+        return set(data['items'])
 
 
 class ShopUpdateView(APIView):
