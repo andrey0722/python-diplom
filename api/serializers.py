@@ -6,8 +6,10 @@ from django.core.validators import URLValidator
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from .models import Category
 from .models import Contact
 from .models import Shop
+from .models import ShopOffer
 from .models import User
 
 
@@ -384,7 +386,7 @@ class ShopUpdateURLSerializer(serializers.Serializer):
     url = URLField()
 
 
-class ShopStateSerializer(serializers.ModelSerializer):
+class ShopSerializer(serializers.ModelSerializer):
     """Serializer for Shop model."""
 
     state = serializers.BooleanField(source='is_active')
@@ -393,3 +395,35 @@ class ShopStateSerializer(serializers.ModelSerializer):
         model = Shop
         fields = ('id', 'name', 'state')
         read_only_fields = ('id', 'name')
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    """Serializer for Category model."""
+
+    class Meta:
+        model = Category
+        fields = ('id', 'name')
+        read_only_fields = ('id', 'name')
+
+
+class ShopOfferSerializer(serializers.ModelSerializer):
+    """Serializer for ShopOffer model."""
+
+    name = serializers.CharField(source='product.name')
+    category = CategorySerializer(source='product.category')
+    price_rrc = PositiveIntField(source='msrp')
+    shop = ShopSerializer()
+
+    class Meta:
+        model = ShopOffer
+        fields = (
+            'id',
+            'name',
+            'model',
+            'quantity',
+            'price',
+            'price_rrc',
+            'discount',
+            'category',
+            'shop',
+        )

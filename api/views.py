@@ -12,6 +12,7 @@ from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import CreateAPIView
 from rest_framework.generics import GenericAPIView
+from rest_framework.generics import ListAPIView
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.generics import UpdateAPIView
@@ -26,10 +27,16 @@ from rest_framework.views import APIView
 from .exceptions import MissingIdsError
 from .exceptions import ShopUrlLoadError
 from .exceptions import TokenConfirmError
+from .filters import CategoryFilter
+from .filters import ShopFilter
+from .filters import ShopOfferFilter
+from .models import Category
 from .models import Contact
 from .models import Shop
+from .models import ShopOffer
 from .models import Token
 from .models import User
+from .serializers import CategorySerializer
 from .serializers import ContactSerializer
 from .serializers import EmailConfirmSerializer
 from .serializers import IdSerializer
@@ -37,7 +44,8 @@ from .serializers import ItemsSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import SendEmailVerificationSerializer
 from .serializers import SendPasswordResetSerializer
-from .serializers import ShopStateSerializer
+from .serializers import ShopOfferSerializer
+from .serializers import ShopSerializer
 from .serializers import ShopUpdateURLSerializer
 from .serializers import TokenSerializer
 from .serializers import UserLoginSerializer
@@ -375,7 +383,7 @@ class ShopStateView(RetrieveAPIView, UpdateModelMixin):
     """View for managing a shop's active state."""
 
     queryset = Shop.objects
-    serializer_class = ShopStateSerializer
+    serializer_class = ShopSerializer
     permission_classes = (IsAuthenticated,)
 
     @override
@@ -402,3 +410,27 @@ class ShopStateView(RetrieveAPIView, UpdateModelMixin):
             Response: Updated shop state.
         """
         return self.partial_update(request, *args, **kwargs)
+
+
+class ShopListView(ListAPIView):
+    """List view for shops with optional name filtering."""
+
+    queryset = Shop.objects.all()
+    serializer_class = ShopSerializer
+    filterset_class = ShopFilter
+
+
+class CategoryListView(ListAPIView):
+    """List view for product categories with optional name filtering."""
+
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    filterset_class = CategoryFilter
+
+
+class ShopOfferListView(ListAPIView):
+    """List view for shop offers with optional shop and category filtering."""
+
+    queryset = ShopOffer.objects.all()
+    serializer_class = ShopOfferSerializer
+    filterset_class = ShopOfferFilter

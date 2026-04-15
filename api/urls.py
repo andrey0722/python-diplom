@@ -1,9 +1,12 @@
 from django.urls import path
 
+from .views import CategoryListView
 from .views import EmailConfirmView
 from .views import PasswordResetConfirmView
 from .views import SendEmailVerificationView
 from .views import SendPasswordResetView
+from .views import ShopListView
+from .views import ShopOfferListView
 from .views import ShopStateView
 from .views import ShopUpdateView
 from .views import UserContactsView
@@ -30,4 +33,7 @@ urlpatterns = [
     path('user/contact', UserContactsView.as_view()),
     path('partner/update', ShopUpdateView.as_view()),
     path('partner/state', ShopStateView.as_view()),
+    path('shops', ShopListView.as_view()),
+    path('categories', CategoryListView.as_view()),
+    path('products', ShopOfferListView.as_view()),
 ]

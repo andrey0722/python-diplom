@@ -1,5 +1,6 @@
 django~=6.0.3
 django-environ~=0.13.0
+django-filter~=25.2
 django-phonenumber-field[phonenumbers]~=8.4.0
 djangorestframework~=3.17.1
 pyyaml~=6.0.3
