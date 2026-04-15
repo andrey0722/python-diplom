@@ -10,6 +10,12 @@ class MissingIdsError(NotFound):
     """Failed to find one or more requested item IDs."""
 
     def __init__(self, missing_ids: Iterable[object], code: object = None):
+        """Initialize the exception with the missing IDs.
+
+        Args:
+            missing_ids (Iterable[object]): IDs that were not found.
+            code (object, optional): Optional error code.
+        """
         detail = {
             'detail': {
                 'error': _('One or more ids not found.'),

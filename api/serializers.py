@@ -15,17 +15,23 @@ class PasswordField(serializers.CharField):
     """Password input field using hidden input rendering in forms."""
 
     def __init__(self, **kwargs):
-        """Initialize password field styling."""
-        super().__init__(
-            style={'input_type': 'password'},
-            **kwargs,
-        )
+        """Initialize password field with secure input styling.
+
+        Args:
+            kwargs: Additional arguments passed to CharField.
+        """
+        super().__init__(style={'input_type': 'password'}, **kwargs)
 
 
 class PositiveIntField(serializers.IntegerField):
     """Integer field that only accepts values greater than zero."""
 
     def __init__(self, **kwargs):
+        """Initialize the positive integer field with minimum value of 1.
+
+        Args:
+            **kwargs: Additional arguments passed to IntegerField.
+        """
         super().__init__(min_value=1, **kwargs)
 
 
@@ -227,15 +233,39 @@ class ShopPricingSerializer(serializers.Serializer):
     type DictList = list[dict[str, object]]
 
     def validate_categories(self, value: DictList) -> DictList:
-        """Validate the categories list contains unique IDs."""
+        """Validate the categories list contains unique IDs.
+
+        Args:
+            value (DictList): List of category dictionaries.
+
+        Returns:
+            DictList: The validated categories list.
+        """
         return self._validate_unique(value)
 
     def validate_goods(self, value: DictList) -> DictList:
-        """Validate goods entries using unique part numbers."""
+        """Validate goods entries using unique part numbers.
+
+        Args:
+            value (DictList): List of product dictionaries.
+
+        Returns:
+            DictList: The validated goods list.
+        """
         return self._validate_unique(value, 'part_number')
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Validate goods -> category references."""
+        """Validate goods -> category references to ensure integrity.
+
+        Args:
+            attrs (dict[str, Any]): The attributes being validated.
+
+        Returns:
+            dict[str, Any]: The validated attributes.
+
+        Raises:
+            ValidationError: If any product references invalid category.
+        """
         goods_errors = {}
         category_ids = {category['id'] for category in attrs['categories']}
 
@@ -258,7 +288,18 @@ class ShopPricingSerializer(serializers.Serializer):
 
     @staticmethod
     def _validate_unique(value: DictList, field_name: str = 'id') -> DictList:
-        """Ensure list items are unique by the given field."""
+        """Ensure list items are unique by the given field.
+
+        Args:
+            value (DictList): List of dictionaries to validate.
+            field_name (str): Field name to check for duplicates.
+
+        Returns:
+            DictList: The validated list.
+
+        Raises:
+            ValidationError: If duplicate values are found.
+        """
         found_ids = set()
         errors = {}
 
@@ -289,6 +330,14 @@ if settings.DEBUG:
 
         @override
         def __call__(self, value: str | None) -> None:
+            """Validate a URL, allowing local file URLs in debug mode.
+
+            Args:
+                value (str | None): The URL string to validate.
+
+            Raises:
+                ValidationError: If the URL is invalid.
+            """
             parts = urlsplit(value or '')
             scheme = parts.scheme.lower()
             if scheme == 'file':
@@ -296,7 +345,14 @@ if settings.DEBUG:
             return super().__call__(value)
 
         def _validate_file_url(self, parts):
-            """Validate a local file URL."""
+            """Validate a local file URL.
+
+            Args:
+                parts: URL components from urlsplit.
+
+            Raises:
+                ValidationError: If the file URL is invalid.
+            """
             if parts.netloc or not parts.path:
                 # pass
                 raise serializers.ValidationError(self.message)
@@ -312,7 +368,11 @@ class URLField(serializers.CharField):
     }
 
     def __init__(self, **kwargs):
-        """Initialize URLField instance."""
+        """Initialize URLField with URL validator.
+
+        Args:
+            kwargs: Additional arguments passed to CharField.
+        """
         super().__init__(**kwargs)
         validator = URLValidator(message=self.error_messages['invalid'])
         self.validators.append(validator)

@@ -64,12 +64,22 @@ class User(AbstractUser):
     position = models.CharField(_('position'), max_length=50, blank=True)
 
     @property
-    def username(self):
-        """Exclude username field from user model."""
+    def username(self) -> str:
+        """Exclude username field from user model.
+
+        Returns:
+            str: Should not be used; exists only for compatibility with
+                Django user manager.
+        """
+        return DUMMY_USERNAME
 
     @username.setter
     def username(self, _):
-        """Dummy setter."""
+        """Dummy setter for username field.
+
+        Args:
+            _: Value to set (ignored).
+        """
 
     @property
     def full_name(self) -> str:
@@ -125,21 +135,39 @@ class Contact(models.Model):
         verbose_name_plural = _('contacts')
 
     def __str__(self) -> str:
-        """Return the contact address as a formatted string."""
+        """Return the contact address as a formatted string.
+
+        Returns:
+            str: The formatted address string.
+        """
         return self.address
 
     @property
     @admin.display(description=_('Address'))
-    def address(self):
-        """Return the formatted address string."""
+    def address(self) -> str:
+        """Return the formatted address string.
+
+        Combines city, street, house number, and apartment into a full address.
+
+        Returns:
+            str: Formatted address string.
+        """
         house_parts = (self.house, self.structure, self.building)
         house = ' '.join(filter(len, map(str.strip, house_parts)))
         return f'{self.city}, {self.street} {house}, {self.apartment}'
 
     @property
     @admin.display(description=_('Contact person'))
-    def contact_person(self):
-        """Return the contact person's full name."""
+    def contact_person(self) -> str:
+        """Get the contact person's full name.
+
+        Returns the contact person's full name from first/middle/last name
+        fields, falling back to the user's full name if no contact person
+        name is set.
+
+        Returns:
+            str: The contact person's full name.
+        """
         name_parts = (self.first_name, self.middle_name, self.last_name)
         name = ' '.join(filter(len, map(str.strip, name_parts)))
         return name or self.user.full_name
@@ -165,12 +193,21 @@ class Category(models.Model):
         constraints = (unique_ignore_case('Category', 'name'),)
 
     def __str__(self) -> str:
-        """Return the category name."""
+        """Return the category name.
+
+        Returns:
+            str: The category name.
+        """
         return self.name
 
     @property
     @admin.display(description=_('Products count'))
-    def products_count(self):
+    def products_count(self) -> int:
+        """Get the number of products in this category.
+
+        Returns:
+            int: The count of products.
+        """
         return self.products.count()
 
 
@@ -194,12 +231,21 @@ class Product(models.Model):
         constraints = (unique_ignore_case('Product', 'name'),)
 
     def __str__(self) -> str:
-        """Return the product name."""
+        """Return the product name.
+
+        Returns:
+            str: The product name.
+        """
         return self.name
 
     @property
     @admin.display(description=_('Offers count'))
-    def offers_count(self):
+    def offers_count(self) -> int:
+        """Get the number of shop offers for this product.
+
+        Returns:
+            int: The count of shop offers.
+        """
         return self.offers.count()
 
 
@@ -225,7 +271,11 @@ class Shop(models.Model):
         constraints = (unique_ignore_case('Shop', 'name'),)
 
     def __str__(self) -> str:
-        """Return the shop name."""
+        """Return the shop name.
+
+        Returns:
+            str: The shop name.
+        """
         return self.name
 
 
@@ -240,7 +290,11 @@ class Parameter(models.Model):
         constraints = (unique_ignore_case('Parameter', 'name'),)
 
     def __str__(self) -> str:
-        """Return the parameter name."""
+        """Return the parameter name.
+
+        Returns:
+            str: The parameter name.
+        """
         return self.name
 
 
@@ -322,5 +376,9 @@ class ProductParameter(models.Model):
     value = models.CharField(_('parameter value'), max_length=120)
 
     def __str__(self) -> str:
-        """Return the product parameter and its value."""
+        """Return the product parameter and its value.
+
+        Returns:
+            str: Formatted parameter string.
+        """
         return f'{self.parameter}: {self.value}'

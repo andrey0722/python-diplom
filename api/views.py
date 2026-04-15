@@ -63,7 +63,17 @@ class TokenConfirmView(GenericAPIView):
     validate_token: Callable[[User, str], bool] | None = None
 
     def post(self, request: Request) -> Response:
-        """Validate request data and confirm the provided token."""
+        """Validate request data and confirm the provided token.
+
+        Args:
+            request (Request): The incoming request object.
+
+        Returns:
+            Response: Response indicating token confirmation status.
+
+        Raises:
+            TokenConfirmError: If the token is invalid or expired.
+        """
         assert self.serializer_class is not None, 'Serializer is not set'
         data = validate_data(self.serializer_class, request.data)
         user: User | None = data['user']
@@ -75,11 +85,22 @@ class TokenConfirmView(GenericAPIView):
         return self.token_confirmed(data)
 
     def bad_token(self) -> NoReturn:
-        """Handle invalid tokens."""
+        """Handle invalid tokens by raising an error.
+
+        Raises:
+            TokenConfirmError: Always raised to indicate invalid token.
+        """
         raise TokenConfirmError
 
     def token_confirmed(self, data: dict[str, Any]) -> Response:  # noqa: ARG002
-        """Actions when valid token is provided."""
+        """Actions when valid token is provided.
+
+        Args:
+            data (dict[str, Any]): Validated token data.
+
+        Returns:
+            Response: Final response to the client.
+        """
         return Response(_('Token confirmed.'))
 
 
@@ -194,7 +215,11 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
 
     @override
     def get_object(self):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Return the current authorized user."""
+        """Get the current authorized user object.
+
+        Returns:
+            User: The current authorized user.
+        """
         obj = self.request.user
         self.check_object_permissions(self.request, obj)
         return obj
@@ -222,27 +247,55 @@ class UserContactsView(ListCreateAPIView, UpdateAPIView):
 
     @property
     def user(self) -> User:
-        """Return the current authenticated user."""
+        """Get the current authorized user.
+
+        Returns:
+            User: The authorized user from the request.
+        """
         return cast(User, self.request.user)
 
     @override
     def get_queryset(self) -> QuerySet:  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Filter contacts for the current user."""
+        """Get contacts filtered for the current user.
+
+        Returns:
+            QuerySet: Contact queryset filtered by current user.
+        """
         return self.queryset.filter(user=self.user)
 
     @override
     def get_object(self):
-        """Resolve the object using the ID from request data."""
+        """Resolve the object using the ID from request data.
+
+        Returns:
+            Contact: The contact object with the ID from request.
+        """
         self.kwargs[self.lookup_field] = self._get_id()
         return super().get_object()
 
     @override
     def perform_create(self, serializer: BaseSerializer):
-        """Save a new contact for the current user."""
+        """Save a new contact for the current user.
+
+        Args:
+            serializer (BaseSerializer): Serializer with validated data.
+        """
         serializer.save(user=self.user)
 
     def delete(self, _request, *_args, **_kwargs):
-        """Delete selected contacts by ID list."""
+        """Delete selected contacts by ID list from request.
+
+        Args:
+            _request: The request object.
+            _args: Additional positional arguments (unused).
+            _kwargs: Additional keyword arguments (unused).
+
+        Returns:
+            Response: HTTP response to the client.
+
+        Raises:
+            MissingIdsError: If any of the requested IDs don't exist.
+        """
         item_ids = self._get_items()
         queryset = self.get_queryset().filter(id__in=item_ids)
         count = queryset.count()
@@ -253,12 +306,20 @@ class UserContactsView(ListCreateAPIView, UpdateAPIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _get_id(self) -> int:
-        """Read a single object ID from request data."""
+        """Read a single object ID from request data.
+
+        Returns:
+            int: The parsed object ID.
+        """
         data = validate_request(IdSerializer, self)
         return data['id']
 
     def _get_items(self) -> set[int]:
-        """Read a list of item IDs from request data."""
+        """Read a list of item IDs from request data.
+
+        Returns:
+            set[int]: A set of parsed item IDs.
+        """
         data = validate_request(ItemsSerializer, self)
         return set(data['items'])
 
@@ -270,7 +331,17 @@ class ShopUpdateView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def post(self, request: Request) -> Response:
-        """Validate the incoming URL and apply shop pricing."""
+        """Validate incoming URL and load shop pricing data.
+
+        Args:
+            request (Request): The request object containing shop update URL.
+
+        Returns:
+            Response: Success message after updating shop data.
+
+        Raises:
+            ShopUrlLoadError: If the URL cannot be fetched or is invalid.
+        """
         data = validate_data(self.serializer_class, request.data)
         url: str = data['url']
         pricing = self.load_shop_pricing(url)
@@ -278,7 +349,18 @@ class ShopUpdateView(APIView):
         return Response(_('Shop data updated.'))
 
     def load_shop_pricing(self, url: str) -> str:
-        """Fetch the shop pricing document from the URL."""
+        """Fetch the shop pricing document from the provided URL.
+
+        Args:
+            url (str): The URL to fetch pricing data from.
+
+        Returns:
+            str: The raw pricing document content.
+
+        Raises:
+            ShopUrlLoadError: If the URL request fails or
+                non-success status.
+        """
         try:
             response = retry_get_url(url)
         except httpx.RequestError as e:
@@ -298,7 +380,11 @@ class ShopStateView(RetrieveAPIView, UpdateModelMixin):
 
     @override
     def get_object(self):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Return the current authorized user's shop."""
+        """Get the current authorized user's shop.
+
+        Returns:
+            Shop: The shop instance associated with the current user.
+        """
         user = self.request.user
         obj = get_object_or_404(self.get_queryset(), user=user)
         self.check_object_permissions(self.request, obj)

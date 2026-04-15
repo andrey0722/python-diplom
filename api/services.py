@@ -108,7 +108,14 @@ def get_validated_data(serializer: BaseSerializer) -> dict[str, Any]:
 
 @functools.cache
 def get_model_fields(cls: type[Model]) -> set[str]:
-    """Return a set of field names defined on a Django model class."""
+    """Return a set of field names defined on a Django model class.
+
+    Args:
+        cls (type[Model]): The Django model class.
+
+    Returns:
+        set[str]: Set of field names from the model.
+    """
     return {field.name for field in cls._meta.fields}
 
 
@@ -116,7 +123,15 @@ def filter_by_fields(
     cls: type[Model],
     data: dict[str, object],
 ) -> dict[str, object]:
-    """Filter data keys that are model field names."""
+    """Filter data keys that are model field names.
+
+    Args:
+        cls (type[Model]): The Django model class.
+        data (dict[str, object]): Dictionary of data to filter.
+
+    Returns:
+        dict[str, object]: Filtered dictionary with only valid model field keys.
+    """
     fields = get_model_fields(cls)
     return {field: value for field, value in data.items() if field in fields}
 
@@ -194,20 +209,20 @@ email_verify_token_gen = TokenGenerator('email-verify')
 password_reset_token_gen = TokenGenerator('password-reset')
 
 
-def check_email_verify_token(user: User | None, token: str | None):
-    """Check if the token is valid for the user.
+def check_email_verify_token(user: User | None, token: str | None) -> bool:
+    """Check if the email verification token is valid for the user.
 
     Args:
-        user (User | None): The user to check.
-        token (str | None): The token to validate.
+        user (User | None): The user to validate against.
+        token (str | None): The token to check.
 
     Returns:
-        bool: True if token is valid.
+        bool: True if token is valid, False otherwise.
     """
     return email_verify_token_gen.check_token(user, token)
 
 
-def check_password_reset_token(user: User | None, token: str | None):
+def check_password_reset_token(user: User | None, token: str | None) -> bool:
     """Check if the password reset token is valid for the user.
 
     Args:
@@ -220,8 +235,15 @@ def check_password_reset_token(user: User | None, token: str | None):
     return password_reset_token_gen.check_token(user, token)
 
 
-def get_template_context(request: HttpRequest | Request):
-    """Build the base context used for email message templates."""
+def get_template_context(request: HttpRequest | Request) -> dict[str, Any]:
+    """Build the base context used for email message templates.
+
+    Args:
+        request (HttpRequest | Request): The request object.
+
+    Returns:
+        dict[str, Any]: Context dictionary for the template.
+    """
     if isinstance(request, Request):
         # `Request` works as a proxy over `HttpRequest`
         request = cast(HttpRequest, request)
@@ -261,7 +283,7 @@ def send_email_verification_mail(  # noqa: PLR0913
     message_template: str = 'api/email_verification_email.txt',
     html_template: str = 'api/email_verification_email.html',
     from_email: str | None = None,
-):
+) -> None:
     """Send email verification mail to user.
 
     Args:
@@ -315,7 +337,7 @@ def send_password_reset_mail(  # noqa: PLR0913
     message_template: str = 'api/password_reset_email.txt',
     html_template: str = 'api/password_reset_email.html',
     from_email: str | None = None,
-):
+) -> None:
     """Send a password reset email to the given user.
 
     Args:
@@ -368,7 +390,7 @@ def render_and_send_mail(  # noqa: PLR0913
     to_email: str,
     from_email: str | None = None,
     html_template: str | None = None,
-):
+) -> None:
     """Send a django.core.mail.EmailMultiAlternatives to `to_email`.
 
     Args:
@@ -401,14 +423,35 @@ def render_and_send_mail(  # noqa: PLR0913
 def debug_process_file_url[**P](
     func: Callable[Concatenate[str, P], httpx.Response],
 ) -> Callable[Concatenate[str, P], httpx.Response]:
-    """Allow local file URL processing in DEBUG mode only."""
+    """Decorator allowing local file URL processing in DEBUG mode only.
+
+    When `DEBUG` is True, this decorator enables fetching local
+    files via file:// URLs. In production, file URLs are handled
+    by the original function.
+
+    Args:
+        func (Callable): The function to decorate, accepting URL as
+            its first parameter.
+
+    Returns:
+        Callable: The decorated function `DEBUG` is True, otherwise `func`.
+    """
     if not settings.DEBUG:
         # No wrapping
         return func
 
     @functools.wraps(func)
     def wrapper(url: str, *args: Any, **kwargs: Any) -> httpx.Response:
-        """Adds local file URL support."""
+        """Process URL, adding support for file:// scheme.
+
+        Args:
+            url (str): The URL to process (http://, https://, or file://).
+            args: Additional positional arguments for the decorated function.
+            kwargs: Additional keyword arguments for the decorated function.
+
+        Returns:
+            httpx.Response: HTTP response object.
+        """
         parts = urlparse(url)
         if parts.scheme != 'file':
             return func(url, *args, **kwargs)
