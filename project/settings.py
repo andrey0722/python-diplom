@@ -92,7 +92,10 @@ EMAIL_HOST_PASSWORD = env.str('EMAIL_PASSWORD', 'email_password')
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'api.authentication.TokenAuthentication',
-    ]
+    ],
+    'DEFAULT_PAGINATION_CLASS': (
+        'rest_framework.pagination.LimitOffsetPagination'
+    ),
 }
 
 WSGI_APPLICATION = 'project.wsgi.application'
