@@ -52,6 +52,19 @@ def serialize(cls: type[BaseSerializer], instance: object) -> dict[str, Any]:
     return cast(dict[str, Any], serializer.data)
 
 
+def serialize_dict(cls: type[BaseSerializer], **kwargs: Any) -> dict[str, Any]:
+    """Serialize keyword arguments using the given serializer class.
+
+    Args:
+        cls (type[BaseSerializer]): The serializer class to use.
+        kwargs: Keyword arguments to serialize.
+
+    Returns:
+        dict[str, Any]: The serialized data.
+    """
+    return serialize(cls, kwargs)
+
+
 def validate_request(
     cls: type[BaseSerializer],
     view: APIView,
@@ -182,7 +195,12 @@ class TokenGenerator(PasswordResetTokenGenerator):
     """Custom token generator for one-time validation codes."""
 
     def __init__(self, salt: str | None = None) -> None:
-        """Initialize the token generator with an optional salt."""
+        """Initialize the token generator with an optional salt.
+
+        Args:
+            salt (str | None): Optional salt string to use for token
+                generation. If provided, overrides the default `key_salt`.
+        """
         super().__init__()
         if salt is not None:
             self.key_salt = salt
@@ -283,7 +301,7 @@ def send_email_verification_mail(  # noqa: PLR0913
     message_template: str = 'api/email_verification_email.txt',
     html_template: str = 'api/email_verification_email.html',
     from_email: str | None = None,
-) -> None:
+) -> str | None:
     """Send email verification mail to user.
 
     Args:
@@ -294,13 +312,16 @@ def send_email_verification_mail(  # noqa: PLR0913
         message_template (str): Template for plain text message.
         html_template (str): Template for HTML message.
         from_email (str | None): From email address.
+
+    Returns:
+        str | None: Email confirmation token generated if any.
     """
     if user is None:
         logger.info('User %s does not exist', email)
-        return
+        return None
     if user.is_active:
         logger.info('User %s already confirmed', user.email)
-        return
+        return None
 
     email = user.email
     request_type = 'POST'
@@ -327,6 +348,7 @@ def send_email_verification_mail(  # noqa: PLR0913
         to_email=email,
         from_email=from_email,
     )
+    return token
 
 
 def send_password_reset_mail(  # noqa: PLR0913
@@ -337,7 +359,7 @@ def send_password_reset_mail(  # noqa: PLR0913
     message_template: str = 'api/password_reset_email.txt',
     html_template: str = 'api/password_reset_email.html',
     from_email: str | None = None,
-) -> None:
+) -> str | None:
     """Send a password reset email to the given user.
 
     Args:
@@ -348,13 +370,16 @@ def send_password_reset_mail(  # noqa: PLR0913
         message_template (str): Template path for the plain text email body.
         html_template (str): Template path for the HTML email body.
         from_email (str | None): Optional from-address for the email.
+
+    Returns:
+        str | None: Password reset token generated if any.
     """
     if user is None:
         logger.info('User %s does not exist', email)
-        return
+        return None
     if not user.is_active:
         logger.info('User %s is inactive', user.email)
-        return
+        return None
 
     email = user.email
     request_type = 'POST'
@@ -381,6 +406,7 @@ def send_password_reset_mail(  # noqa: PLR0913
         to_email=email,
         from_email=from_email,
     )
+    return token
 
 
 def render_and_send_mail(  # noqa: PLR0913
@@ -434,7 +460,8 @@ def debug_process_file_url[**P](
             its first parameter.
 
     Returns:
-        Callable: The decorated function `DEBUG` is True, otherwise `func`.
+        Callable: The decorated function if DEBUG is True, otherwise
+            the original function.
     """
     if not settings.DEBUG:
         # No wrapping

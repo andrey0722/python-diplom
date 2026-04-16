@@ -95,6 +95,22 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
 
 
+class VerificationSentSerializer(serializers.Serializer):
+    """Serializer for verification email sent response."""
+
+    status = serializers.CharField()
+
+
+if settings.DEBUG:
+
+    class DebugVerificationSentSerializer(VerificationSentSerializer):
+        """Add the token itself in DEBUG mode only."""
+
+        token = serializers.CharField()
+
+    VerificationSentSerializer = DebugVerificationSentSerializer
+
+
 class EmailToUserSerializer(serializers.Serializer):
     """Serializer for email input with user lookup."""
 

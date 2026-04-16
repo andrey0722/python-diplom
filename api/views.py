@@ -1,4 +1,3 @@
-from collections.abc import Callable
 import logging
 from typing import Any, NoReturn, cast, override
 
@@ -50,16 +49,55 @@ from .serializers import ShopUpdateURLSerializer
 from .serializers import TokenSerializer
 from .serializers import UserLoginSerializer
 from .serializers import UserSerializer
+from .serializers import VerificationSentSerializer
 from .services import check_email_verify_token
 from .services import check_password_reset_token
 from .services import retry_get_url
 from .services import send_email_verification_mail
 from .services import send_password_reset_mail
+from .services import serialize_dict
 from .services import update_shop_pricing_yaml
 from .services import validate_data
 from .services import validate_request
 
 logger = logging.getLogger(__name__)
+
+
+class SendVerificationView(GenericAPIView):
+    """View for sending verification emails."""
+
+    serializer_class = None
+    response_message = _('Verification is sent if needed.')
+
+    @staticmethod
+    def send_mail(request: Request, *args: Any, **kwargs: Any) -> str | None:
+        """Send verification email to the user.
+
+        This method must be implemented by subclasses to handle the actual
+        email sending logic. It should generate and send a verification
+        token to the user based on the provided request and data.
+
+        Args:
+            request (Request): The HTTP request object.
+            args (Any): Additional positional arguments.
+            kwargs (Any): Additional keyword arguments containing user data.
+
+        Returns:
+            The verification token string if generated, None otherwise.
+        """
+        raise NotImplementedError
+
+    def post(self, request: Request) -> Response:
+        assert self.serializer_class is not None, 'Serializer is not set'
+
+        data = validate_data(self.serializer_class, request.data)
+        token = self.send_mail(request, **data)
+        data = serialize_dict(
+            VerificationSentSerializer,
+            status=self.response_message,
+            token=token,
+        )
+        return Response(data)
 
 
 class TokenConfirmView(GenericAPIView):
@@ -68,7 +106,22 @@ class TokenConfirmView(GenericAPIView):
     serializer_class = None
     """Serializer must have 'user' and 'token' fields."""
 
-    validate_token: Callable[[User, str], bool] | None = None
+    @staticmethod
+    def validate_token(user: User | None, token: str | None) -> bool:
+        """Validate the provided token for the given user.
+
+        This method must be implemented by subclasses to handle the actual
+        token validation logic. It should check if the token is valid for
+        the specified user and perform any necessary token cleanup.
+
+        Args:
+            user (User | None): The user object to validate the token for.
+            token (str | None): The token string to validate.
+
+        Returns:
+            True if the token is valid, False otherwise.
+        """
+        raise NotImplementedError
 
     def post(self, request: Request) -> Response:
         """Validate request data and confirm the provided token.
@@ -87,8 +140,7 @@ class TokenConfirmView(GenericAPIView):
         user: User | None = data['user']
         token: str = data['token']
 
-        assert self.validate_token is not None, 'Token validator is not set'
-        if not check_password_reset_token(user, token):
+        if not self.validate_token(user, token):
             self.bad_token()
         return self.token_confirmed(data)
 
@@ -124,30 +176,19 @@ class UserRegisterView(CreateAPIView):
         send_email_verification_mail(self.request, user)
 
 
-class SendEmailVerificationView(APIView):
-    """View for sending email verification."""
+class SendEmailVerificationView(SendVerificationView):
+    """View for sending email verification emails."""
 
     serializer_class = SendEmailVerificationSerializer
-
-    def post(self, request: Request) -> Response:
-        """Send verification email to user.
-
-        Args:
-            request (Request): The request object.
-
-        Returns:
-            Response: Success message.
-        """
-        data = validate_data(self.serializer_class, request.data)
-        send_email_verification_mail(request, **data)
-        return Response(_('Verification email is sent if needed.'))
+    response_message = _('Verification email is sent if needed.')
+    send_mail = staticmethod(send_email_verification_mail)
 
 
 class EmailConfirmView(TokenConfirmView):
     """View for confirming email with token."""
 
     serializer_class = EmailConfirmSerializer
-    validate_token = check_email_verify_token
+    validate_token = staticmethod(check_email_verify_token)
 
     @override
     def token_confirmed(self, data: dict[str, Any]) -> Response:
@@ -158,23 +199,19 @@ class EmailConfirmView(TokenConfirmView):
         return Response(_('Email successfully verified.'))
 
 
-class SendPasswordResetView(APIView):
+class SendPasswordResetView(SendVerificationView):
     """View for sending password reset emails."""
 
     serializer_class = SendPasswordResetSerializer
-
-    def post(self, request: Request) -> Response:
-        """Send a password reset email to user."""
-        data = validate_data(self.serializer_class, request.data)
-        send_password_reset_mail(request, **data)
-        return Response(_('Password reset email is sent if needed.'))
+    response_message = _('Password reset email is sent if needed.')
+    send_mail = staticmethod(send_password_reset_mail)
 
 
 class PasswordResetConfirmView(TokenConfirmView):
     """View for confirming password reset with token."""
 
     serializer_class = PasswordResetConfirmSerializer
-    validate_token = check_password_reset_token
+    validate_token = staticmethod(check_password_reset_token)
 
     @override
     def token_confirmed(self, data: dict[str, Any]) -> Response:
