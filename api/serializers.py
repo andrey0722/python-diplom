@@ -1,3 +1,5 @@
+import json
+import re
 from typing import Any, override
 from urllib.parse import urlsplit
 
@@ -8,6 +10,8 @@ from rest_framework import serializers
 
 from .models import Category
 from .models import Contact
+from .models import Order
+from .models import OrderItem
 from .models import Shop
 from .models import ShopOffer
 from .models import User
@@ -443,3 +447,120 @@ class ShopOfferSerializer(serializers.ModelSerializer):
             'category',
             'shop',
         )
+
+
+class JsonListField(serializers.ListField):
+    """Custom list field that parses JSON strings into Python lists.
+
+    Handles JSON strings with optional trailing commas and converts them
+    to Python list objects.
+    """
+
+    default_error_messages = {
+        'invalid_json': _('Invalid JSON string: {reason}'),
+    }
+
+    text_preprocess = (
+        (re.compile(r',\s*[\]]'), ']'),
+        (re.compile(r',\s*[}]'), '}'),
+    )
+    """Remove trailing commas from input."""
+
+    @override
+    def get_value(self, dictionary: dict) -> Any:
+        """Get value from dictionary, supporting partial updates.
+
+        Args:
+            dictionary (dict): The input data dictionary.
+
+        Returns:
+            Any: The field value or empty if not present in partial update.
+        """
+        if self.field_name not in dictionary:
+            partial = getattr(self.root, 'partial', False)
+            if partial:
+                return serializers.empty
+        return dictionary.get(self.field_name, serializers.empty)
+
+    @override
+    def to_internal_value(self, data: Any) -> list[Any]:
+        """Convert JSON string or list to internal list representation.
+
+        Preprocesses the data to remove trailing commas and parses JSON strings.
+
+        Args:
+            data (Any): The input data (JSON string or list).
+
+        Returns:
+            list[Any]: The processed list of items.
+
+        Raises:
+            ValidationError: If JSON parsing fails or data is not a list.
+        """
+        if isinstance(data, str):
+            # Preprocess data
+            for pattern, replace in self.text_preprocess:
+                data = re.sub(pattern, replace, data)
+            # Parse as JSON list
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError as e:
+                self.fail('invalid_json', reason=str(e))
+
+        if not isinstance(data, list):
+            self.fail('not_a_list', input_type=type(data).__name__)
+        return super().to_internal_value(data)
+
+
+class AddToBasketItemSerializer(serializers.ModelSerializer):
+    """Serializer for individual items being added to the basket."""
+
+    product_info = serializers.IntegerField(source='shop_offer_id')
+
+    class Meta:
+        model = OrderItem
+        fields = ('product_info', 'quantity')
+
+
+class AddToBasketSerializer(serializers.Serializer):
+    """Serializer for adding multiple items to the basket."""
+
+    items = JsonListField(child=AddToBasketItemSerializer())
+
+
+class EditBasketItemSerializer(serializers.ModelSerializer):
+    """Serializer for basket items being edited with new quantities."""
+
+    id = serializers.IntegerField()
+
+    class Meta:
+        model = OrderItem
+        fields = ('id', 'quantity')
+
+
+class EditBasketSerializer(serializers.Serializer):
+    """Serializer for updating multiple items in the basket."""
+
+    items = JsonListField(child=EditBasketItemSerializer())
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    """Serializer for order items displayed in order details."""
+
+    product_info = serializers.IntegerField(source='shop_offer_id')
+
+    class Meta:
+        model = OrderItem
+        fields = ('id', 'product_info', 'quantity')
+        read_only_fields = ('id',)
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    """Serializer for Order model with nested items."""
+
+    items = OrderItemSerializer(many=True)
+
+    class Meta:
+        model = Order
+        fields = ('id', 'state', 'items')
+        read_only_fields = ('id', 'state')

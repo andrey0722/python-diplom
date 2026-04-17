@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager as BaseUserManager
 from django.db import models
+from django.db.models import Q
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
@@ -375,6 +376,10 @@ class ProductParameter(models.Model):
     )
     value = models.CharField(_('parameter value'), max_length=120)
 
+    class Meta:
+        verbose_name = _('product parameter')
+        verbose_name_plural = _('product parameters')
+
     def __str__(self) -> str:
         """Return the product parameter and its value.
 
@@ -382,3 +387,94 @@ class ProductParameter(models.Model):
             str: Formatted parameter string.
         """
         return f'{self.parameter}: {self.value}'
+
+
+class OrderState(models.TextChoices):
+    BASKET = 'basket', _('Basket')
+    NEW = 'new', _('New')
+    CONFIRMED = 'confirmed', _('Confirmed')
+    ASSEMBLED = 'assembled', _('Assembled')
+    SENT = 'sent', _('Sent')
+    COMPLETED = 'completed', _('Completed')
+    CANCELLED = 'cancelled', _('Cancelled')
+
+
+class Order(models.Model):
+    """Order placed by a user with items from different shops."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='orders',
+        verbose_name=_('user'),
+    )
+    contact = models.ForeignKey(
+        Contact,
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='orders',
+        verbose_name=_('contact'),
+    )
+    state = models.CharField(_('state'), choices=OrderState)
+
+    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('updated at'), auto_now=True)
+
+    class Meta:
+        verbose_name = _('order')
+        verbose_name_plural = _('orders')
+        constraints = (
+            models.UniqueConstraint(
+                fields=('state',),
+                condition=Q(state=OrderState.BASKET),
+                name='uq_order_single_basket',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(state=OrderState.BASKET) | Q(contact__isnull=False)
+                ),
+                name='ck_order_contact_not_null',
+            ),
+        )
+
+    def __str__(self) -> str:
+        """Return order representation with ID and state.
+
+        Returns:
+            str: Formatted order string.
+        """
+        order_id = self.id  # pyright: ignore[reportAttributeAccessIssue]
+        return f'Order #{order_id} [{self.state}]'
+
+
+class OrderItem(models.Model):
+    """Line item in an order referencing a specific shop offer."""
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name=_('order'),
+    )
+    shop_offer = models.ForeignKey(
+        ShopOffer,
+        on_delete=models.CASCADE,
+        related_name='order_items',
+        verbose_name=_('shop offer'),
+    )
+    quantity = models.PositiveIntegerField(_('quantity'))
+
+    class Meta:
+        verbose_name = _('order item')
+        verbose_name_plural = _('order items')
+        unique_together = ('order', 'shop_offer')
+
+    def __str__(self) -> str:
+        """Return order item representation with order and item ID.
+
+        Returns:
+            str: Formatted order item string.
+        """
+        item_id = self.id  # pyright: ignore[reportAttributeAccessIssue]
+        return f'{self.order} │ Item #{item_id}'

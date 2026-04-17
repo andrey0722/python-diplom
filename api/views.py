@@ -2,7 +2,6 @@ import logging
 from typing import Any, NoReturn, cast, override
 
 from django.contrib.auth.signals import user_logged_in
-from django.db.models.query import QuerySet
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 import httpx
@@ -15,7 +14,6 @@ from rest_framework.generics import ListAPIView
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.generics import UpdateAPIView
-from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -23,14 +21,19 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
-from .exceptions import MissingIdsError
 from .exceptions import ShopUrlLoadError
 from .exceptions import TokenConfirmError
 from .filters import CategoryFilter
 from .filters import ShopFilter
 from .filters import ShopOfferFilter
+from .mixins import FilterByIdsListMixin
+from .mixins import GetObjectByAuthUserMixin
+from .mixins import GetQuerySetByAuthUserMixin
 from .models import Category
 from .models import Contact
+from .models import Order
+from .models import OrderItem
+from .models import OrderState
 from .models import Shop
 from .models import ShopOffer
 from .models import Token
@@ -39,7 +42,7 @@ from .serializers import CategorySerializer
 from .serializers import ContactSerializer
 from .serializers import EmailConfirmSerializer
 from .serializers import IdSerializer
-from .serializers import ItemsSerializer
+from .serializers import OrderSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import SendEmailVerificationSerializer
 from .serializers import SendPasswordResetSerializer
@@ -50,15 +53,17 @@ from .serializers import TokenSerializer
 from .serializers import UserLoginSerializer
 from .serializers import UserSerializer
 from .serializers import VerificationSentSerializer
+from .services import add_to_basket
 from .services import check_email_verify_token
 from .services import check_password_reset_token
+from .services import edit_basket
 from .services import retry_get_url
 from .services import send_email_verification_mail
 from .services import send_password_reset_mail
 from .services import serialize_dict
 from .services import update_shop_pricing_yaml
-from .services import validate_data
 from .services import validate_request
+from .services import validate_view
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +95,7 @@ class SendVerificationView(GenericAPIView):
     def post(self, request: Request) -> Response:
         assert self.serializer_class is not None, 'Serializer is not set'
 
-        data = validate_data(self.serializer_class, request.data)
+        data = validate_request(self.serializer_class, request)
         token = self.send_mail(request, **data)
         data = serialize_dict(
             VerificationSentSerializer,
@@ -136,13 +141,13 @@ class TokenConfirmView(GenericAPIView):
             TokenConfirmError: If the token is invalid or expired.
         """
         assert self.serializer_class is not None, 'Serializer is not set'
-        data = validate_data(self.serializer_class, request.data)
+        data = validate_request(self.serializer_class, request)
         user: User | None = data['user']
         token: str = data['token']
 
-        if not self.validate_token(user, token):
-            self.bad_token()
-        return self.token_confirmed(data)
+        if self.validate_token(user, token):
+            return self.token_confirmed(data)
+        return self.bad_token()
 
     def bad_token(self) -> NoReturn:
         """Handle invalid tokens by raising an error.
@@ -236,7 +241,7 @@ class UserLoginView(APIView):
         Returns:
             Response: The user API token.
         """
-        credentials = validate_data(self.serializer_class, request.data)
+        credentials = validate_request(self.serializer_class, request)
 
         user = authenticate(cast(HttpRequest, request), **credentials)
         if user is None:
@@ -269,44 +274,29 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
         self.check_object_permissions(self.request, obj)
         return obj
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Request) -> Response:
         """Update user personal information.
 
         Args:
             request: The request object.
-            args: Additional positional arguments.
-            kwargs: Additional keyword arguments.
 
         Returns:
             Response: Updated user information.
         """
-        return self.partial_update(request, *args, **kwargs)
+        return self.partial_update(request)
 
 
-class UserContactsView(ListCreateAPIView, UpdateAPIView):
+class UserContactsView(
+    GetQuerySetByAuthUserMixin,
+    FilterByIdsListMixin,
+    ListCreateAPIView,
+    UpdateAPIView,
+):
     """View for managing user contacts."""
 
     queryset = Contact.objects
     serializer_class = ContactSerializer
     permission_classes = (IsAuthenticated,)
-
-    @property
-    def user(self) -> User:
-        """Get the current authorized user.
-
-        Returns:
-            User: The authorized user from the request.
-        """
-        return cast(User, self.request.user)
-
-    @override
-    def get_queryset(self) -> QuerySet:  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Get contacts filtered for the current user.
-
-        Returns:
-            QuerySet: Contact queryset filtered by current user.
-        """
-        return self.queryset.filter(user=self.user)
 
     @override
     def get_object(self):
@@ -325,29 +315,18 @@ class UserContactsView(ListCreateAPIView, UpdateAPIView):
         Args:
             serializer (BaseSerializer): Serializer with validated data.
         """
-        serializer.save(user=self.user)
+        serializer.save(user=self.request.user)
 
-    def delete(self, _request, *_args, **_kwargs):
+    def delete(self, request: Request) -> Response:  # noqa: ARG002
         """Delete selected contacts by ID list from request.
 
         Args:
-            _request: The request object.
-            _args: Additional positional arguments (unused).
-            _kwargs: Additional keyword arguments (unused).
+            request: The request object.
 
         Returns:
             Response: HTTP response to the client.
-
-        Raises:
-            MissingIdsError: If any of the requested IDs don't exist.
         """
-        item_ids = self._get_items()
-        queryset = self.get_queryset().filter(id__in=item_ids)
-        count = queryset.count()
-        if count != len(item_ids):
-            found_ids = set(queryset.values_list('id', flat=True))
-            raise MissingIdsError(item_ids - found_ids)
-        queryset.delete()
+        self.filter_by_ids().delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _get_id(self) -> int:
@@ -356,17 +335,8 @@ class UserContactsView(ListCreateAPIView, UpdateAPIView):
         Returns:
             int: The parsed object ID.
         """
-        data = validate_request(IdSerializer, self)
+        data = validate_view(IdSerializer, self)
         return data['id']
-
-    def _get_items(self) -> set[int]:
-        """Read a list of item IDs from request data.
-
-        Returns:
-            set[int]: A set of parsed item IDs.
-        """
-        data = validate_request(ItemsSerializer, self)
-        return set(data['items'])
 
 
 class ShopUpdateView(APIView):
@@ -387,7 +357,7 @@ class ShopUpdateView(APIView):
         Raises:
             ShopUrlLoadError: If the URL cannot be fetched or is invalid.
         """
-        data = validate_data(self.serializer_class, request.data)
+        data = validate_request(self.serializer_class, request)
         url: str = data['url']
         pricing = self.load_shop_pricing(url)
         update_shop_pricing_yaml(request.user, url, pricing)
@@ -416,24 +386,16 @@ class ShopUpdateView(APIView):
         return response.text
 
 
-class ShopStateView(RetrieveAPIView, UpdateModelMixin):
+class ShopStateView(
+    GetObjectByAuthUserMixin,
+    RetrieveAPIView,
+    UpdateModelMixin,
+):
     """View for managing a shop's active state."""
 
     queryset = Shop.objects
     serializer_class = ShopSerializer
     permission_classes = (IsAuthenticated,)
-
-    @override
-    def get_object(self):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Get the current authorized user's shop.
-
-        Returns:
-            Shop: The shop instance associated with the current user.
-        """
-        user = self.request.user
-        obj = get_object_or_404(self.get_queryset(), user=user)
-        self.check_object_permissions(self.request, obj)
-        return obj
 
     def post(self, request, *args, **kwargs):
         """Update the shop active state.
@@ -471,3 +433,56 @@ class ShopOfferListView(ListAPIView):
     queryset = ShopOffer.objects.all()
     serializer_class = ShopOfferSerializer
     filterset_class = ShopOfferFilter
+
+
+class BasketView(
+    GetObjectByAuthUserMixin,
+    FilterByIdsListMixin,
+    RetrieveAPIView,
+):
+    """View for managing the user's shopping basket."""
+
+    queryset = Order.objects.filter(state=OrderState.BASKET)
+    serializer_class = OrderSerializer
+    permission_classes = (IsAuthenticated,)
+
+    items_queryset = OrderItem.objects.filter(order__state=OrderState.BASKET)
+
+    def post(self, request: Request) -> Response:
+        """Add items to the user's basket.
+
+        Args:
+            request (Request): The request object containing items to add.
+
+        Returns:
+            Response: The updated basket contents.
+        """
+        add_to_basket(request.user, request)
+        return self.get(request)
+
+    def put(self, request: Request) -> Response:
+        """Update quantities of items in the user's basket.
+
+        Args:
+            request (Request): The request object containing items to update.
+
+        Returns:
+            Response: The updated basket contents.
+        """
+        edit_basket(request.user, request)
+        return self.get(request)
+
+    def delete(self, request: Request) -> Response:  # noqa: ARG002
+        """Delete specified items from the user's basket.
+
+        Deletes order items by ID from the user's basket.
+
+        Args:
+            request (Request): The request object (unused).
+
+        Returns:
+            Response: Empty response with 204 status.
+        """
+        queryset = self.items_queryset.filter(order__user=self.request.user)
+        self.filter_by_ids(queryset).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

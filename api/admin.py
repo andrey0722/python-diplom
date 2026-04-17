@@ -4,6 +4,8 @@ from django.utils.translation import gettext_lazy as _
 
 from .models import Category
 from .models import Contact
+from .models import Order
+from .models import OrderItem
 from .models import Parameter
 from .models import Product
 from .models import ProductParameter
@@ -208,4 +210,46 @@ class ShopOfferAdmin(admin.ModelAdmin):
     list_filter = ('shop__name',)
     search_fields = ('shop__name', 'product__name', 'part_number')
     inlines = (ProductParametersInline,)
+    save_on_top = True
+
+
+@admin.register(OrderItem)
+class OrderItemAdmin(admin.ModelAdmin):
+    """Admin configuration for OrderItem model."""
+
+    list_display = (
+        'id',
+        'order',
+        'order__user',
+        'quantity',
+        'shop_offer__price',
+        'shop_offer__shop',
+    )
+    list_filter = ('order__state', 'shop_offer__shop__name')
+    search_fields = ('id', 'order__id', f'order__user__{User.USERNAME_FIELD}')
+    save_on_top = True
+
+
+class OrderItemsInline(admin.StackedInline):
+    """Inline admin for OrderItem model."""
+
+    model = OrderItem
+    extra = 0
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    """Admin configuration for Order model."""
+
+    list_display = (
+        'id',
+        'user',
+        'state',
+        'contact',
+        'created_at',
+        'updated_at',
+    )
+    list_filter = ('state',)
+    search_fields = ('id', f'user__{User.USERNAME_FIELD}')
+    inlines = (OrderItemsInline,)
     save_on_top = True

@@ -47,3 +47,11 @@ class ShopUpdateError(APIException):
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     default_detail = _('Could not process shop pricing data')
     default_code = 'shop_update_error'
+
+
+class BasketModifyError(APIException):
+    """Unable to modify user's basket contents."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    default_detail = _('Could not modify basket contents')
+    default_code = 'basket_modify_error'

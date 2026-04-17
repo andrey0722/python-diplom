@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from collections.abc import Iterable
 import functools
 import json
 import logging
@@ -23,14 +24,21 @@ from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 import yaml
 
+from .exceptions import BasketModifyError
+from .exceptions import MissingIdsError
 from .exceptions import ShopUpdateError
 from .models import Category
+from .models import Order
+from .models import OrderItem
+from .models import OrderState
 from .models import Parameter
 from .models import Product
 from .models import ProductParameter
 from .models import Shop
 from .models import ShopOffer
 from .models import User
+from .serializers import AddToBasketSerializer
+from .serializers import EditBasketSerializer
 from .serializers import EmailConfirmSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import ShopPricingSerializer
@@ -65,7 +73,7 @@ def serialize_dict(cls: type[BaseSerializer], **kwargs: Any) -> dict[str, Any]:
     return serialize(cls, kwargs)
 
 
-def validate_request(
+def validate_view(
     cls: type[BaseSerializer],
     view: APIView,
     /,
@@ -82,6 +90,15 @@ def validate_request(
         dict[str, Any]: The validated data.
     """
     request = cast(Request, view.request)
+    return validate_request(cls, request, raise_exception=raise_exception)
+
+
+def validate_request(
+    cls: type[BaseSerializer],
+    request: Request,
+    /,
+    raise_exception: bool = True,
+) -> dict[str, Any]:
     data = cast(dict[str, Any], request.data)
     return validate_data(cls, data, raise_exception=raise_exception)
 
@@ -147,6 +164,71 @@ def filter_by_fields(
     """
     fields = get_model_fields(cls)
     return {field: value for field, value in data.items() if field in fields}
+
+
+def get_model[T: Model](cls: type[T], **kwargs: object) -> T:
+    """Retrieve a single model instance by the given lookup parameters.
+
+    Args:
+        cls (type[T]): The Django model class.
+        kwargs (object): Keyword arguments for model field lookup.
+
+    Returns:
+        T: The retrieved model instance.
+
+    Raises:
+        T.DoesNotExist: If no matching instance is found.
+    """
+    kwargs = filter_by_fields(cls, kwargs)
+    return cls.objects.get(**kwargs)
+
+
+def locate_model_items[T: Model](
+    cls: type[T],
+    items: Iterable[dict[str, Any]],
+    _item_id_field: str = 'id',
+    _model_id_field: str = 'id',
+    **kwargs: object,
+) -> dict[int, T]:
+    """Locate multiple model instances from an iterable of item dictionaries.
+
+    Retrieves model instances by extracting IDs from item dictionaries and
+    looking them up using the specified ID fields. Raises an error if any
+    requested items are not found.
+
+    Args:
+        cls (type[T]): The Django model class.
+        items (Iterable[dict[str, Any]]): List of item dictionaries.
+        _item_id_field (str): Field name in item dictionary for the ID.
+        _model_id_field (str): Field name on the model for lookup.
+        kwargs (object): Additional filter conditions for the model lookup.
+
+    Returns:
+        dict[int, T]: Dictionary mapping item IDs to model instances.
+
+    Raises:
+        MissingIdsError: If any requested IDs are not found in the database.
+    """
+    model_items: dict[int, T] = {}
+    missing_ids = set[int]()
+    kwargs = filter_by_fields(cls, kwargs)
+    for item in items:
+        try:
+            item_id = item[_item_id_field]
+        except KeyError:
+            # Failed to extract the key, just skip this record
+            continue
+        try:
+            lookup = {_model_id_field: item_id} | kwargs
+            model_item = cls.objects.get(**lookup)
+        except cls.DoesNotExist:
+            missing_ids.add(item_id)
+        else:
+            model_items[item_id] = model_item
+
+    if missing_ids:
+        raise MissingIdsError(missing_ids)
+    return model_items
 
 
 def create_model[T: Model](
@@ -596,3 +678,93 @@ def _update_shop_pricing_impl(
                 offer=offer,
                 value=value,
             )
+
+
+def add_to_basket(user: User, request: Request) -> None:
+    """Add items to the user's shopping basket from request data.
+
+    Validates the request data and adds shop offers to the user's basket
+    (creates or retrieves basket order). If an item is already in the basket,
+    its quantity is increased.
+
+    Args:
+        user (User): The user adding items to their basket.
+        request (Request): The request object containing basket items.
+
+    Raises:
+        BasketModifyError: If there's a database error during the operation.
+    """
+    data = validate_request(AddToBasketSerializer, request)
+    try:
+        _add_to_basket_impl(user, data)
+    except DatabaseError as e:
+        logger.exception('Add to basket error error')
+        raise BasketModifyError from e
+
+
+@transaction.atomic
+def _add_to_basket_impl(user: User, data: dict[str, Any]) -> None:
+    """Add validated items to the user's basket order.
+
+    Creates a new basket order if needed and adds shop offer items to it.
+    If an item is already in the basket, increases its quantity instead
+    of creating a duplicate.
+
+    Args:
+        user (User): The user who owns the basket.
+        data (dict[str, Any]): Validated data containing items to add.
+    """
+    basket = get_or_create_model(Order, user=user, state=OrderState.BASKET)
+    offers = locate_model_items(ShopOffer, data['items'], 'shop_offer_id')
+
+    for item in data['items']:
+        offer = offers[item['shop_offer_id']]
+        try:
+            order_item = get_model(OrderItem, order=basket, shop_offer=offer)
+        except OrderItem.DoesNotExist:
+            create_model(OrderItem, item, shop_offer=offer, order=basket)
+        else:
+            # If item already in the basket, just increase its quantity
+            order_item.quantity += item['quantity']
+            order_item.save()
+
+
+def edit_basket(user: User, request: Request) -> None:
+    """Update quantities of items in the user's shopping basket.
+
+    Validates the request data and updates order item quantities in the
+    user's basket based on the provided item data.
+
+    Args:
+        user (User): The user updating their basket.
+        request (Request): The request object containing updated items.
+
+    Raises:
+        BasketModifyError: If there's a database error during the operation.
+    """
+    data = validate_request(EditBasketSerializer, request)
+    try:
+        _edit_basket_impl(user, data)
+    except DatabaseError as e:
+        logger.exception('Edit basket error error')
+        raise BasketModifyError from e
+
+
+@transaction.atomic
+def _edit_basket_impl(user: User, data: dict[str, Any]) -> None:
+    """Update quantities for items in the user's basket order.
+
+    Modifies the quantity of existing order items in the user's basket
+    based on the provided item data.
+
+    Args:
+        user (User): The user whose basket is being updated.
+        data (dict[str, Any]): Validated data containing items with new quantities.
+    """
+    basket = get_or_create_model(Order, user=user, state=OrderState.BASKET)
+    order_items = locate_model_items(OrderItem, data['items'], order=basket)
+
+    for item in data['items']:
+        order_item = order_items[item['id']]
+        order_item.quantity = item['quantity']
+        order_item.save()
