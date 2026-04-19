@@ -1,0 +1,140 @@
+shop: СберМегаМаркет
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 33
+    name: Фотоаппараты
+  - id: 58
+    name: Рюкзаки
+  - id: 59
+    name: Продукты питания
+  - id: 60
+    name: Одежда
+
+goods:
+  - id: 9501001
+    category: 224
+    model: apple/iphone-xs-max-gold
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 101500
+    price_rrc: 109990
+    quantity: 9
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+  - id: 9501002
+    category: 224
+    model: apple/iphone-xr-red-special
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 64500
+    price_rrc: 70990
+    quantity: 13
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Металлическая рамка": да
+  - id: 9501003
+    category: 1
+    model: sandisk/ultra-flair-64gb-classic
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1570
+    price_rrc: 1990
+    quantity: 18
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+      "Гарантия (лет)": 3
+  - id: 9501004
+    category: 33
+    model: sony/alpha-a6400-compact
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 80500
+    price_rrc: 93990
+    quantity: 5
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Автофокус": да
+  - id: 9501005
+    category: 224
+    model: samsung/galaxy-s24-premium
+    name: Смартфон Samsung Galaxy S24 256GB (черный)
+    price: 84000
+    price_rrc: 92990
+    quantity: 7
+    parameters:
+      "Диагональ (дюйм)": 6.2
+      "Разрешение (пикс)": 3080x1440
+      "Встроенная память (Гб)": 256
+      "Цвет": черный
+      "Поддержка 5G": да
+      "Быстрая зарядка": 45W
+  - id: 9502001
+    category: 58
+    model: osprey/daylite-20
+    name: Рюкзак Osprey Daylite 20 (черный)
+    price: 6900
+    price_rrc: 8490
+    quantity: 15
+    parameters:
+      "Объем (л)": 20
+      "Цвет": черный
+      "Материал": нейлон
+      "Вес (кг)": 0.7
+      "Водонепроницаемость": да
+  - id: 9502002
+    category: 59
+    model: ahmad/english-breakfast-250g
+    name: Чай Ahmad Tea English Breakfast 250 г
+    price: 850
+    price_rrc: 1090
+    quantity: 20
+    parameters:
+      "Вес (г)": 250
+      "Вид чая": черный
+      "Состав": 100% чайное сырье
+      "Упаковка": банка
+      "Язык": русский
+  - id: 9502003
+    category: 60
+    model: the-north-face/thermoball-eco
+    name: Куртка The North Face Thermoball Eco (серый)
+    price: 18900
+    price_rrc: 22990
+    quantity: 8
+    parameters:
+      "Размер": S
+      "Цвет": серый
+      "Материал": полиэстер
+      "Водонепроницаемость": да
+      "Утеплитель": синтепон
+  - id: 9502004
+    category: 58
+    model: thule/subterra-34l
+    name: Рюкзак Thule Subterra 34L (синий)
+    price: 9800
+    price_rrc: 11990
+    quantity: 10
+    parameters:
+      "Объем (л)": 34
+      "Цвет": синий
+      "Материал": нейлон
+      "Вес (кг)": 1.1
+      "Водонепроницаемость": нет

@@ -1,0 +1,132 @@
+shop: Ашан
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 727
+    name: Продукты питания
+  - id: 728
+    name: Бытовая химия
+  - id: 729
+    name: Книги
+
+goods:
+  - id: 17001001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 106000
+    price_rrc: 108990
+    quantity: 12
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+      "Материал рамки": алюминий
+      "Версия iOS": 17.1
+  - id: 17001002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 64000
+    price_rrc: 70990
+    quantity: 17
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+      "Гарантия (лет)": 1
+      "Цвет корпуса": красный
+  - id: 17001003
+    category: 1
+    model: sandisk/ultra-flair-64gb-2026
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1640
+    price_rrc: 1990
+    quantity: 28
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+      "Гарантия (лет)": 2
+      "Пропускная способность": 150
+  - id: 17002001
+    category: 727
+    model: activia/yogurt-strawberry-130g
+    name: Йогурт Activia клубника 130 г
+    price: 45
+    price_rrc: 60
+    quantity: 55
+    parameters:
+      "Вес (г)": 130
+      "Вкус": клубника
+      "Жирность (%)": 2.5
+      "Срок годности (дни)": 21
+      "Упаковка": пластик
+      "Страна производства": Франция
+  - id: 17002002
+    category: 728
+    model: fairy/dishwasher-gel-1l
+    name: Средство для посудомоечных машин Fairy 1 л
+    price: 320
+    price_rrc: 450
+    quantity: 40
+    parameters:
+      "Объем (л)": 1
+      "Тип": гель
+      "Для": посудомоечные машины
+      "Бренд": Fairy
+      "Страна производства": Германия
+      "Экологично": да
+  - id: 17002003
+    category: 729
+    model: tolstoy/anna-karenina
+    name: Книга "Анна Каренина" Л.Н. Толстой
+    price: 550
+    price_rrc: 700
+    quantity: 22
+    parameters:
+      "Формат": 84x108/32
+      "Страниц": 864
+      "Переплет": мягкий
+      "Язык": русский
+      "Издательство": АСТ
+      "Год издания": 2023
+  - id: 17002004
+    category: 727
+    model: nestle/nesquik-cereal-375g
+    name: Хлопья Nestlé Nesquik 375 г
+    price: 180
+    price_rrc: 220
+    quantity: 35
+    parameters:
+      "Вес (г)": 375
+      "Вкус": шоколад
+      "Состав": кукуруза
+      "Упаковка": картон
+      "Страна производства": Швейцария
+      "Калории (ккал)": 380
+  - id: 17002005
+    category: 728
+    model: persil/laundry-detergent-3kg
+    name: Стиральный порошок Persil 3 кг
+    price: 650
+    price_rrc: 850
+    quantity: 30
+    parameters:
+      "Вес (кг)": 3
+      "Тип": порошок
+      "Для": цветное белье
+      "Бренд": Persil
+      "Страна производства": Германия
+      "Эффективность": высокая

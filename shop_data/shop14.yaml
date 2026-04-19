@@ -1,0 +1,135 @@
+shop: 220 Вольт
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 33
+    name: Фотоаппараты
+  - id: 718
+    name: Бытовая техника
+  - id: 719
+    name: Одежда
+  - id: 720
+    name: Книги
+
+goods:
+  - id: 14001001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 103000
+    price_rrc: 108990
+    quantity: 9
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+      "Материал рамки": алюминий
+      "Версия iOS": 16.8
+  - id: 14001002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 63400
+    price_rrc: 70990
+    quantity: 14
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+      "Гарантия (лет)": 1
+      "Цвет корпуса": красный
+  - id: 14001003
+    category: 33
+    model: sony/alpha-a6400-mk2
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 81000
+    price_rrc: 92990
+    quantity: 6
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Стабилизация": да
+      "Wi-Fi": да
+      "Вес (г)": 565
+  - id: 14002001
+    category: 718
+    model: lg/washing-machine-f2j3ns0w
+    name: Стиральная машина LG F2J3NS0W 7 кг
+    price: 34990
+    price_rrc: 39990
+    quantity: 11
+    parameters:
+      "Загрузка (кг)": 7
+      "Скорость отжима (об/мин)": 1200
+      "Класс энергопотребления": A+++
+      "Цвет": белый
+      "Шум стирки (дБ)": 53
+      "Гарантия (лет)": 1
+  - id: 14002002
+    category: 719
+    model: adidas/t-shirt-climalite
+    name: Футболка adidas Climalite (черная)
+    price: 2990
+    price_rrc: 3990
+    quantity: 25
+    parameters:
+      "Размер": M
+      "Цвет": черный
+      "Материал": хлопок
+      "Бренд": adidas
+      "Сезон": лето
+      "Уход": машинная стирка
+  - id: 14002003
+    category: 720
+    model: pushkin/eugene-onegin
+    name: Книга "Евгений Онегин" А.С. Пушкин
+    price: 350
+    price_rrc: 450
+    quantity: 40
+    parameters:
+      "Формат": 84x108/32
+      "Страниц": 224
+      "Переплет": мягкий
+      "Язык": русский
+      "Издательство": АСТ
+      "Год издания": 2023
+  - id: 14002004
+    category: 718
+    model: samsung/refrigerator-rt38k5930s8
+    name: Холодильник Samsung RT38K5930S8 380 л
+    price: 69990
+    price_rrc: 79990
+    quantity: 7
+    parameters:
+      "Объем (л)": 380
+      "Тип": двухкамерный
+      "Класс энергопотребления": A+
+      "Цвет": серебристый
+      "Шум (дБ)": 39
+      "Гарантия (лет)": 3
+  - id: 14002005
+    category: 719
+    model: nike/joggers-sportswear
+    name: Джоггеры Nike Sportswear (серые)
+    price: 6990
+    price_rrc: 8990
+    quantity: 20
+    parameters:
+      "Размер": L
+      "Цвет": серый
+      "Материал": полиэстер
+      "Бренд": Nike
+      "Сезон": осень-зима
+      "Уход": машинная стирка

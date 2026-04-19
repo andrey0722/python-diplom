@@ -1,0 +1,132 @@
+shop: Спортмастер
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 721
+    name: Спортивные товары
+  - id: 722
+    name: Косметика
+  - id: 723
+    name: Книги
+
+goods:
+  - id: 15001001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 104000
+    price_rrc: 108990
+    quantity: 10
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+      "Материал рамки": алюминий
+      "Версия iOS": 16.9
+  - id: 15001002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 63600
+    price_rrc: 70990
+    quantity: 15
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+      "Гарантия (лет)": 1
+      "Цвет корпуса": красный
+  - id: 15001003
+    category: 1
+    model: sandisk/ultra-flair-64gb-2026
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1620
+    price_rrc: 1990
+    quantity: 26
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+      "Гарантия (лет)": 2
+      "Пропускная способность": 150
+  - id: 15002001
+    category: 721
+    model: nike/running-shoes-air-zoom
+    name: Беговые кроссовки Nike Air Zoom Pegasus 40 (черные)
+    price: 11990
+    price_rrc: 14990
+    quantity: 22
+    parameters:
+      "Размер": 42
+      "Цвет": черный
+      "Материал": сетка
+      "Тип": беговые
+      "Амортизация": Zoom Air
+      "Вес (г)": 280
+  - id: 15002002
+    category: 722
+    model: garnier/shampoo-fructis
+    name: Шампунь Garnier Fructis для сухих волос 400 мл
+    price: 320
+    price_rrc: 450
+    quantity: 38
+    parameters:
+      "Объем (мл)": 400
+      "Тип": шампунь
+      "Для волос": сухие
+      "Бренд": Garnier
+      "Страна производства": Франция
+      "Гипоаллергенно": да
+  - id: 15002003
+    category: 723
+    model: chekhov/short-stories
+    name: Книга "Рассказы" А.П. Чехов (сборник)
+    price: 480
+    price_rrc: 620
+    quantity: 28
+    parameters:
+      "Формат": 84x108/32
+      "Страниц": 352
+      "Переплет": твердый
+      "Язык": русский
+      "Издательство": Эксмо
+      "Год издания": 2024
+  - id: 15002004
+    category: 721
+    model: adidas/football-ball
+    name: Футбольный мяч adidas Tango 18 (белый)
+    price: 4990
+    price_rrc: 5990
+    quantity: 16
+    parameters:
+      "Цвет": белый
+      "Материал": синтетика
+      "Размер": 5
+      "Вес (г)": 420
+      "Тип": тренировочный
+      "Гарантия (лет)": 1
+  - id: 15002005
+    category: 722
+    model: nivea/creme-200ml
+    name: Крем для лица Nivea Q10 200 мл
+    price: 650
+    price_rrc: 850
+    quantity: 32
+    parameters:
+      "Объем (мл)": 200
+      "Тип": крем
+      "Для кожи": лицо
+      "Бренд": Nivea
+      "Страна производства": Германия
+      "Гипоаллергенно": да

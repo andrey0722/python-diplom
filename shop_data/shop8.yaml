@@ -1,0 +1,146 @@
+shop: Яндекс.Маркет
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 33
+    name: Фотоаппараты
+  - id: 701
+    name: Посуда
+  - id: 702
+    name: Игрушки
+
+goods:
+  - id: 9801001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 99500
+    price_rrc: 107990
+    quantity: 7
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+      "Материал рамки": алюминий
+  - id: 9801002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 62500
+    price_rrc: 70990
+    quantity: 14
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+      "Гарантия (лет)": 1
+  - id: 9801003
+    category: 1
+    model: sandisk/ultra-flair-64gb-2026
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1550
+    price_rrc: 1990
+    quantity: 25
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+      "Гарантия (лет)": 2
+  - id: 9801004
+    category: 33
+    model: sony/alpha-a6400-mk2
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 79900
+    price_rrc: 92990
+    quantity: 6
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Стабилизация": да
+      "Вес (г)": 565
+  - id: 9801005
+    category: 224
+    model: samsung/galaxy-s24-fitness
+    name: Смартфон Samsung Galaxy S24 256GB (черный)
+    price: 83500
+    price_rrc: 92990
+    quantity: 13
+    parameters:
+      "Диагональ (дюйм)": 6.2
+      "Разрешение (пикс)": 3080x1440
+      "Встроенная память (Гб)": 256
+      "Цвет": черный
+      "Поддержка 5G": да
+      "Быстрая зарядка": 45W
+      "Материал корпуса": стекло
+  - id: 9802001
+    category: 701
+    model: villeroy-boch/country-kitchen-4pcs
+    name: Набор керамических кружек Villeroy & Boch 4 шт.
+    price: 6900
+    price_rrc: 8490
+    quantity: 12
+    parameters:
+      "Объем (мл)": 320
+      "Цвет": белый
+      "Материал": керамика
+      "Упаковка": подарочная коробка
+      "Мытье в посудомоечной машине": да
+      "Страна производства": Германия
+  - id: 9802002
+    category: 701
+    model: ikea/drona-plates-6
+    name: Набор тарелок IKEA DRÖNA 6 шт.
+    price: 2600
+    price_rrc: 3290
+    quantity: 20
+    parameters:
+      "Диаметр (см)": 26
+      "Цвет": белый
+      "Материал": фарфор
+      "Применение": посуда
+      "Мытье в посудомоечной машине": да
+      "Количество": 6
+  - id: 9802003
+    category: 702
+    model: lego/city-fire-truck-60282
+    name: Конструктор LEGO City Пожарный грузовик 60282
+    price: 6200
+    price_rrc: 7590
+    quantity: 16
+    parameters:
+      "Возраст": 6+
+      "Количество деталей": 467
+      "Материал": пластик
+      "Цвет": красный
+      "Язык": русский
+      "Сертификат безопасности": CE
+  - id: 9802004
+    category: 702
+    model: barbie/fashion-adventure
+    name: Кукла Barbie Fashion Adventure
+    price: 4500
+    price_rrc: 5490
+    quantity: 14
+    parameters:
+      "Возраст": 3+
+      "Материал": пластик
+      "Высота (см)": 30
+      "Цвет": розовый
+      "Упаковка": подарочная коробка
+      "Язык": русский

@@ -1,0 +1,167 @@
+shop: Утконос
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 33
+    name: Фотоаппараты
+  - id: 703
+    name: Спортивные товары
+  - id: 704
+    name: Канцелярия
+  - id: 705
+    name: Мебель
+
+goods:
+  - id: 9901001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 98500
+    price_rrc: 107990
+    quantity: 9
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+      "Материал рамки": алюминий
+      "Версия iOS": 16.4
+  - id: 9901002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 63500
+    price_rrc: 70990
+    quantity: 12
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+      "Гарантия (лет)": 2
+      "Тип матрицы": IPS
+  - id: 9901003
+    category: 1
+    model: sandisk/ultra-flair-64gb-2026
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1580
+    price_rrc: 1990
+    quantity: 28
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+      "Гарантия (лет)": 2
+      "Водостойкость": нет
+  - id: 9901004
+    category: 33
+    model: sony/alpha-a6400-mk2
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 78900
+    price_rrc: 92990
+    quantity: 5
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Стабилизация": да
+      "Wi-Fi": да
+      "Вес (г)": 565
+  - id: 9901005
+    category: 224
+    model: samsung/galaxy-s24-fitness
+    name: Смартфон Samsung Galaxy S24 256GB (черный)
+    price: 83200
+    price_rrc: 92990
+    quantity: 11
+    parameters:
+      "Диагональ (дюйм)": 6.2
+      "Разрешение (пикс)": 3080x1440
+      "Встроенная память (Гб)": 256
+      "Цвет": черный
+      "Поддержка 5G": да
+      "Быстрая зарядка": 45W
+      "Материал корпуса": стекло
+      "Степень защиты": IP68
+  - id: 9902001
+    category: 703
+    model: adidas/run-treadmill-500
+    name: Беговая дорожка Adidas Run 500
+    price: 45990
+    price_rrc: 52990
+    quantity: 7
+    parameters:
+      "Тип": электрическая
+      "Максимальная скорость (км/ч)": 18
+      "Площадь для бега (см)": 140x51
+      "Максимальный вес пользователя (кг)": 130
+      "Цвет": черный
+      "Материал": сталь
+  - id: 9902002
+    category: 704
+    model: muji/desk-organizer-set
+    name: Набор настольной канцелярии Muji
+    price: 2100
+    price_rrc: 2690
+    quantity: 22
+    parameters:
+      "Цвет": серый
+      "Материал": пластик
+      "Количество предметов": 7
+      "Упаковка": коробка
+      "Язык": русский
+      "Назначение": офис
+  - id: 9902003
+    category: 705
+    model: ikea/markus-chair
+    name: Офисное кресло IKEA Markus (черный)
+    price: 19990
+    price_rrc: 24990
+    quantity: 10
+    parameters:
+      "Цвет": черный
+      "Материал": полиэстер
+      "Максимальная нагрузка (кг)": 110
+      "Регулировка высоты": да
+      "Подлокотники": да
+      "Вес (кг)": 25
+  - id: 9902004
+    category: 703
+    model: decathlon/yoga-mat-6mm
+    name: Коврик для йоги Decathlon 6 мм
+    price: 950
+    price_rrc: 1290
+    quantity: 30
+    parameters:
+      "Толщина (мм)": 6
+      "Цвет": бирюзовый
+      "Материал": TPE
+      "Длина (см)": 183
+      "Ширина (см)": 61
+      "Противоскользящая поверхность": да
+  - id: 9902005
+    category: 704
+    model: stabilo/point-88-set
+    name: Набор маркеров Stabilo Point 88 10 шт.
+    price: 650
+    price_rrc: 890
+    quantity: 18
+    parameters:
+      "Цвет": разноцветный
+      "Толщина линии (мм)": 0.4
+      "Материал": пластик
+      "Количество": 10
+      "Упаковка": пенал
+      "Язык": русский

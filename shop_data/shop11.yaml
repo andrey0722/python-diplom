@@ -1,0 +1,150 @@
+shop: CDEK.Shopping
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 33
+    name: Фотоаппараты
+  - id: 709
+    name: Товары для дома
+  - id: 710
+    name: Спортивное питание
+  - id: 711
+    name: Кухонная техника
+
+goods:
+  - id: 11001001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 100500
+    price_rrc: 108990
+    quantity: 6
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+      "Материал рамки": алюминий
+      "Версия iOS": 16.5
+  - id: 11001002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 62800
+    price_rrc: 70990
+    quantity: 11
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+      "Гарантия (лет)": 1
+      "Цвет корпуса": красный
+  - id: 11001003
+    category: 1
+    model: sandisk/ultra-flair-64gb-2026
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1590
+    price_rrc: 1990
+    quantity: 21
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+      "Гарантия (лет)": 2
+      "Пропускная способность": 150
+  - id: 11001004
+    category: 33
+    model: sony/alpha-a6400-mk2
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 80500
+    price_rrc: 92990
+    quantity: 4
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Стабилизация": да
+      "Wi-Fi": да
+  - id: 11002001
+    category: 709
+    model: ikea/helfesta-shelf
+    name: Полка IKEA HELFESTA 120x25 см
+    price: 4290
+    price_rrc: 5490
+    quantity: 18
+    parameters:
+      "Цвет": белый
+      "Материал": дерево
+      "Размеры (см)": 120x25x20
+      "Максимальная нагрузка (кг)": 20
+      "Крепление": настенное
+      "Производитель": Швеция
+  - id: 11002002
+    category: 710
+    model: opti-nutrition/isolate-1kg
+    name: Спортивное питание Optimum Nutrition Isolate 1kg
+    price: 5200
+    price_rrc: 6290
+    quantity: 10
+    parameters:
+      "Вес (г)": 1000
+      "Вкус": шоколад
+      "Протеин (г)": 24
+      "Сахар (г)": 1.5
+      "Без глютена": да
+      "Язык": русский
+  - id: 11002003
+    category: 711
+    model: redmond/multicooker-cm-5732
+    name: Мультиварка Redmond RMC-M57
+    price: 8990
+    price_rrc: 10990
+    quantity: 9
+    parameters:
+      "Мощность (Вт)": 860
+      "Объем (л)": 5
+      "Цвет": серебристый
+      "Программы": 13
+      "Таймер": да
+      "Автоочистка": нет
+  - id: 11002004
+    category: 709
+    model: mixit/bed-linen-set
+    name: Постельное белье Mixit Premium Cotton
+    price: 7490
+    price_rrc: 8990
+    quantity: 14
+    parameters:
+      "Размер": 200x220
+      "Материал": хлопок
+      "Цвет": бежевый
+      "Комплектация": пододеяльник, простыня, 2 наволочки
+      "Гипоаллергенно": да
+      "Язык": русский
+  - id: 11002005
+    category: 710
+    model: myprotein/gain-2kg
+    name: Гейнер MyProtein Extreme Gainer 2kg
+    price: 7200
+    price_rrc: 8690
+    quantity: 12
+    parameters:
+      "Вес (г)": 2000
+      "Вкус": ваниль
+      "Калории (ккал)": 390
+      "Белки (г)": 22
+      "Углеводы (г)": 50
+      "Глютен": нет

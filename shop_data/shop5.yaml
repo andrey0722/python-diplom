@@ -1,0 +1,151 @@
+shop: Wildberries
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 33
+    name: Фотоаппараты
+  - id: 52
+    name: Велосипеды
+  - id: 53
+    name: Книги
+  - id: 54
+    name: Кухонная техника
+
+goods:
+  - id: 9301001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 100000
+    price_rrc: 108990
+    quantity: 10
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+  - id: 9301002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 63000
+    price_rrc: 70990
+    quantity: 12
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+  - id: 9301003
+    category: 1
+    model: sandisk/ultra-flair-64gb-2026
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1600
+    price_rrc: 1990
+    quantity: 22
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+  - id: 9301004
+    category: 33
+    model: sony/alpha-a6400-mk2
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 79000
+    price_rrc: 92990
+    quantity: 5
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Стабилизация": да
+  - id: 9302001
+    category: 224
+    model: samsung/galaxy-a54
+    name: Смартфон Samsung Galaxy A54 128GB (черный)
+    price: 37000
+    price_rrc: 42990
+    quantity: 18
+    parameters:
+      "Диагональ (дюйм)": 6.4
+      "Разрешение (пикс)": 2340x1080
+      "Встроенная память (Гб)": 128
+      "Цвет": черный
+      "Поддержка 5G": да
+      "Быстрая зарядка": 25W
+  - id: 9302002
+    category: 52
+    model: forward/f-975
+    name: Велосипед Forward F-975 27.5" (черный)
+    price: 33000
+    price_rrc: 38990
+    quantity: 7
+    parameters:
+      "Размер колес (дюйм)": 27.5
+      "Рама": алюминий
+      "Тормоза": дисковые
+      "Передачи": 21
+      "Вес (кг)": 13.5
+  - id: 9302003
+    category: 53
+    model: chekhov/short-stories-collection
+    name: Книга "Рассказы" Антон Чехов (твердый переплет)
+    price: 750
+    price_rrc: 990
+    quantity: 25
+    parameters:
+      "Формат": 84x108/32
+      "Страниц": 384
+      "Переплет": твердый
+      "Язык": русский
+  - id: 9302004
+    category: 54
+    model: moulinex/homebread-quad
+    name: Хлебопечка Moulinex HomeBread Quad
+    price: 10700
+    price_rrc: 12990
+    quantity: 9
+    parameters:
+      "Мощность (Вт)": 1650
+      "Программы": 19
+      "Объем (г)": 1000
+      "Цвет": белый
+      "Таймер": да
+  - id: 9302005
+    category: 52
+    model: stark/urban-comfort
+    name: Городской велосипед Stark Urban Comfort 28" (синий)
+    price: 25990
+    price_rrc: 31990
+    quantity: 11
+    parameters:
+      "Размер колес (дюйм)": 28
+      "Рама": сталь
+      "Тормоза": ободные
+      "Передачи": 7
+      "Корзина": да
+  - id: 9302006
+    category: 54
+    model: philips/airfryer-hd9721
+    name: Аэрогриль Philips Airfryer HD9721
+    price: 12500
+    price_rrc: 14990
+    quantity: 6
+    parameters:
+      "Мощность (Вт)": 2225
+      "Объем (л)": 4.1
+      "Цвет": черный
+      "Температура (°C)": 80-200
+      "Таймер": 60 мин

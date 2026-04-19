@@ -1,0 +1,132 @@
+shop: Пятерочка
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 733
+    name: Продукты питания
+  - id: 734
+    name: Бытовая химия
+  - id: 735
+    name: Книги
+
+goods:
+  - id: 19001001
+    category: 224
+    model: apple/iphone-xs-max-special
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 108000
+    price_rrc: 108990
+    quantity: 14
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+      "Материал рамки": алюминий
+      "Версия iOS": 17.3
+  - id: 19001002
+    category: 224
+    model: apple/iphone-xr-red
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 64400
+    price_rrc: 70990
+    quantity: 19
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+      "Гарантия (лет)": 1
+      "Цвет корпуса": красный
+  - id: 19001003
+    category: 1
+    model: sandisk/ultra-flair-64gb-2026
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1660
+    price_rrc: 1990
+    quantity: 30
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+      "Гарантия (лет)": 2
+      "Пропускная способность": 150
+  - id: 19002001
+    category: 733
+    model: danone/yogurt-natural-500g
+    name: Йогурт Danone натуральный 500 г
+    price: 85
+    price_rrc: 110
+    quantity: 65
+    parameters:
+      "Вес (г)": 500
+      "Вкус": натуральный
+      "Жирность (%)": 2.5
+      "Срок годности (дни)": 14
+      "Упаковка": пластик
+      "Страна производства": Россия
+  - id: 19002002
+    category: 734
+    model: domestos/disinfectant-1l
+    name: Дезинфицирующее средство Domestos 1 л
+    price: 220
+    price_rrc: 280
+    quantity: 40
+    parameters:
+      "Объем (л)": 1
+      "Тип": жидкость
+      "Для": поверхности
+      "Бренд": Domestos
+      "Страна производства": Великобритания
+      "Экологично": да
+  - id: 19002003
+    category: 735
+    model: pushkin/eugene-onegin
+    name: Книга "Евгений Онегин" А.С. Пушкин
+    price: 420
+    price_rrc: 550
+    quantity: 28
+    parameters:
+      "Формат": 84x108/32
+      "Страниц": 224
+      "Переплет": мягкий
+      "Язык": русский
+      "Издательство": АСТ
+      "Год издания": 2023
+  - id: 19002004
+    category: 733
+    model: nestle/nescafe-gold-200g
+    name: Кофе Nescafé Gold растворимый 200 г
+    price: 450
+    price_rrc: 580
+    quantity: 38
+    parameters:
+      "Вес (г)": 200
+      "Тип": растворимый
+      "Вкус": классический
+      "Упаковка": банка
+      "Страна производства": Швейцария
+      "Кофеин": да
+  - id: 19002005
+    category: 734
+    model: fairy/dishwasher-tabs-30pcs
+    name: Таблетки для посудомоечной машины Fairy 30 шт.
+    price: 380
+    price_rrc: 480
+    quantity: 32
+    parameters:
+      "Количество": 30
+      "Тип": таблетки
+      "Для": посудомоечные машины
+      "Бренд": Fairy
+      "Страна производства": Германия
+      "Эффективность": высокая

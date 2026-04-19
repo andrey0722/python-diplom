@@ -1,0 +1,165 @@
+shop: OZON
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 1
+    name: Flash-накопители
+  - id: 33
+    name: Фотоаппараты
+  - id: 55
+    name: Кухонная техника
+  - id: 56
+    name: Настольные игры
+  - id: 57
+    name: Спортивное питание
+
+goods:
+  - id: 9401001
+    category: 224
+    model: apple/iphone-xs-max-special-edition
+    name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+    price: 101000
+    price_rrc: 109990
+    quantity: 8
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 3174
+      "Материал корпуса": стекло
+  - id: 9401002
+    category: 224
+    model: apple/iphone-xr-red-premium
+    name: Смартфон Apple iPhone XR 256GB (красный)
+    price: 63500
+    price_rrc: 70990
+    quantity: 11
+    parameters:
+      "Диагональ (дюйм)": 6.1
+      "Разрешение (пикс)": 1792x828
+      "Встроенная память (Гб)": 256
+      "Цвет": красный
+      "Поддержка 5G": нет
+      "Аккумулятор (мАч)": 2942
+      "Защита от воды": IP67
+  - id: 9401003
+    category: 1
+    model: sandisk/ultra-flair-64gb-limited
+    name: USB Flash Drive SanDisk Ultra Flair 64GB (silver)
+    price: 1620
+    price_rrc: 1990
+    quantity: 20
+    parameters:
+      "Capacity (GB)": 64
+      "Color": silver
+      "Speed (MB/s)": 150
+      "Interface": USB 3.2
+  - id: 9401004
+    category: 33
+    model: sony/alpha-a6400-travel
+    name: Фотоаппарат Sony Alpha A6400 18-135mm (черный)
+    price: 81000
+    price_rrc: 93990
+    quantity: 4
+    parameters:
+      "Матрица": APS-C
+      "Разрешение (пикс)": 6000x4000
+      "Цвет": черный
+      "Диапазон ISO": 100-32000
+      "Скорость затвора (сек)": 1/11000
+      "Видео": 4K 30fps
+      "Стабилизация": да
+  - id: 9402001
+    category: 55
+    model: de-longhi/magnifica-s-smart
+    name: Кофемашина De'Longhi Magnifica S Smart
+    price: 56000
+    price_rrc: 64990
+    quantity: 6
+    parameters:
+      "Мощность (Вт)": 1450
+      "Тип напитков": эспрессо, капучино, латте
+      "Объем резервуара (л)": 1.8
+      "Цвет": черный
+      "Настройка помола": да
+  - id: 9402002
+    category: 56
+    model: hobbyworld/catan-classic
+    name: Настольная игра "Колонизаторы" (Catan)
+    price: 3200
+    price_rrc: 3990
+    quantity: 14
+    parameters:
+      "Возраст": 10+
+      "Игроки": 3-4
+      "Время игры (мин)": 60
+      "Язык": русский
+      "Тип": стратегия
+  - id: 9402003
+    category: 57
+    model: optimum-nutrition/gold-standard-whey
+    name: Спортивное питание Optimum Nutrition Gold Standard Whey 2.27kg
+    price: 7200
+    price_rrc: 8490
+    quantity: 9
+    parameters:
+      "Вес (г)": 2270
+      "Вкус": ваниль
+      "Протеин (г)": 24
+      "Сахар (г)": 1
+      "Без глютена": да
+  - id: 9402004
+    category: 55
+    model: philips/series-3200
+    name: Кофемашина Philips Series 3200 LatteGo
+    price: 48000
+    price_rrc: 53990
+    quantity: 7
+    parameters:
+      "Мощность (Вт)": 1500
+      "Тип напитков": эспрессо, кофе, латте
+      "Объем резервуара (л)": 1.8
+      "Цвет": серебристый
+      "Автоматическое чистка": да
+  - id: 9402005
+    category: 56
+    model: hobby-world/gloomhaven-junior
+    name: Настольная игра Gloomhaven Junior
+    price: 5900
+    price_rrc: 6990
+    quantity: 12
+    parameters:
+      "Возраст": 7+
+      "Игроки": 2-4
+      "Время игры (мин)": 45
+      "Язык": русский
+      "Тип": приключение
+  - id: 9402006
+    category: 57
+    model: myprotein/impact-whey-protein
+    name: Протеин MyProtein Impact Whey Protein 2.2kg
+    price: 6800
+    price_rrc: 7990
+    quantity: 11
+    parameters:
+      "Вес (г)": 2200
+      "Вкус": шоколад
+      "Протеин (г)": 21
+      "Сахар (г)": 1.9
+      "Без глютена": да
+  - id: 9402007
+    category: 224
+    model: samsung/galaxy-s24-fitness
+    name: Смартфон Samsung Galaxy S24 256GB (черный)
+    price: 84000
+    price_rrc: 92990
+    quantity: 10
+    parameters:
+      "Диагональ (дюйм)": 6.2
+      "Разрешение (пикс)": 3080x1440
+      "Встроенная память (Гб)": 256
+      "Цвет": черный
+      "Поддержка 5G": да
+      "Быстрая зарядка": 45W
