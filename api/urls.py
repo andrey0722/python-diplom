@@ -13,6 +13,7 @@ from .views import ShopUpdateView
 from .views import UserContactsView
 from .views import UserInfoView
 from .views import UserLoginView
+from .views import UserOrderView
 from .views import UserRegisterView
 
 urlpatterns = [
@@ -38,4 +39,5 @@ urlpatterns = [
     path('categories', CategoryListView.as_view()),
     path('products', ShopOfferListView.as_view()),
     path('basket', BasketView.as_view()),
+    path('order', UserOrderView.as_view()),
 ]

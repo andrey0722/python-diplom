@@ -91,6 +91,7 @@ EMAIL_HOST_PASSWORD = env.str('EMAIL_PASSWORD', 'email_password')
 
 
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'api.utils.exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'api.authentication.TokenAuthentication',
     ],

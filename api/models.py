@@ -1,18 +1,21 @@
-from typing import TYPE_CHECKING, override
+import functools
+from typing import TYPE_CHECKING, Final, override
 
 from django.contrib import admin
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager as BaseUserManager
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
+from model_utils.managers import QueryManager
 from phonenumber_field.modelfields import PhoneNumberField
 from rest_framework.authtoken.models import Token as BaseToken
 
 if TYPE_CHECKING:
-    from django.db.models.manager import RelatedManager
+    from django_stubs_ext.db.models.manager import RelatedManager
 
 
 def unique_ignore_case(model: type[models.Model] | str, *fields: str):
@@ -131,6 +134,9 @@ class Contact(models.Model):
     building = models.CharField(_('building'), max_length=8, blank=True)
     apartment = models.CharField(_('apartment'), max_length=8)
 
+    if TYPE_CHECKING:
+        user_id: object
+
     class Meta:
         verbose_name = _('contact')
         verbose_name_plural = _('contacts')
@@ -141,7 +147,7 @@ class Contact(models.Model):
         Returns:
             str: The formatted address string.
         """
-        return self.address
+        return f'{self.user} │ {self.address}'
 
     @property
     @admin.display(description=_('Address'))
@@ -347,10 +353,10 @@ class ShopOffer(models.Model):
     @property
     @admin.display(
         boolean=True,
-        description=_('Shop active'),
+        description=_('Active'),
         ordering='shop__is_active',
     )
-    def shop_is_active(self) -> bool:
+    def is_active(self) -> bool:
         """Check if the offer's shop is active.
 
         Returns:
@@ -390,13 +396,33 @@ class ProductParameter(models.Model):
 
 
 class OrderState(models.TextChoices):
+    """Enumeration of possible order states."""
+
+    # Inactive states
+    CANCELLED = 'cancelled', _('Cancelled')
     BASKET = 'basket', _('Basket')
+
+    # Active states
     NEW = 'new', _('New')
     CONFIRMED = 'confirmed', _('Confirmed')
     ASSEMBLED = 'assembled', _('Assembled')
     SENT = 'sent', _('Sent')
     COMPLETED = 'completed', _('Completed')
-    CANCELLED = 'cancelled', _('Cancelled')
+
+    @classmethod
+    @functools.cache
+    def inactive(cls) -> set['OrderState']:
+        """Return order states that represent inactive orders."""
+        return {cls.BASKET, cls.CANCELLED}
+
+    @classmethod
+    @functools.cache
+    def active(cls) -> set['OrderState']:
+        """Return order states that represent active orders."""
+        return set(cls) - cls.inactive()
+
+
+IS_BASKET: Final = Q(state=OrderState.BASKET)
 
 
 class Order(models.Model):
@@ -421,18 +447,23 @@ class Order(models.Model):
     created_at = models.DateTimeField(_('created at'), auto_now_add=True)
     updated_at = models.DateTimeField(_('updated at'), auto_now=True)
 
+    if TYPE_CHECKING:
+        user_id: object
+        items: RelatedManager['OrderItem']
+
     class Meta:
         verbose_name = _('order')
         verbose_name_plural = _('orders')
         constraints = (
             models.UniqueConstraint(
                 fields=('state',),
-                condition=Q(state=OrderState.BASKET),
+                condition=IS_BASKET,
                 name='uq_order_single_basket',
             ),
             models.CheckConstraint(
                 condition=(
-                    Q(state=OrderState.BASKET) | Q(contact__isnull=False)
+                    Q(state__in=OrderState.inactive())
+                    | Q(contact__isnull=False)
                 ),
                 name='ck_order_contact_not_null',
             ),
@@ -444,8 +475,39 @@ class Order(models.Model):
         Returns:
             str: Formatted order string.
         """
-        order_id = self.id  # pyright: ignore[reportAttributeAccessIssue]
-        return f'Order #{order_id} [{self.state}]'
+        state = OrderState(self.state)
+        return f'Order #{self.pk} [{state.label}]'
+
+    @override
+    def clean(self):
+        """Validate that contact's user matches the order's user."""
+        super().clean()
+        if self.contact is not None and self.user_id != self.contact.user_id:
+            raise ValidationError(
+                {'contact': _('Contact must belong to the same user.')}
+            )
+
+
+class Basket(Order):
+    """Proxy model for basket orders."""
+
+    objects = QueryManager(IS_BASKET)
+
+    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
+        proxy = True
+        verbose_name = _('Basket')
+        verbose_name_plural = _('Baskets')
+
+
+class PlacedOrder(Order):
+    """Proxy model for placed orders."""
+
+    objects = QueryManager(~IS_BASKET)
+
+    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
+        proxy = True
+        verbose_name = _('Order')
+        verbose_name_plural = _('Orders')
 
 
 class OrderItem(models.Model):
@@ -465,6 +527,9 @@ class OrderItem(models.Model):
     )
     quantity = models.PositiveIntegerField(_('quantity'))
 
+    if TYPE_CHECKING:
+        shop_offer_id: object
+
     class Meta:
         verbose_name = _('order item')
         verbose_name_plural = _('order items')
@@ -476,5 +541,4 @@ class OrderItem(models.Model):
         Returns:
             str: Formatted order item string.
         """
-        item_id = self.id  # pyright: ignore[reportAttributeAccessIssue]
-        return f'{self.order} │ Item #{item_id}'
+        return f'{self.order} │ Item #{self.pk}'

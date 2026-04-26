@@ -1,13 +1,15 @@
 import json
 import re
-from typing import Any, override
+from typing import Any, cast, override
 from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.validators import URLValidator
+from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from .models import Basket
 from .models import Category
 from .models import Contact
 from .models import Order
@@ -39,6 +41,24 @@ class PositiveIntField(serializers.IntegerField):
             **kwargs: Additional arguments passed to IntegerField.
         """
         super().__init__(min_value=1, **kwargs)
+
+
+class UserFilteredPrimaryKeyField(serializers.PrimaryKeyRelatedField):
+    """Primary key field that filters queryset by authenticated user."""
+
+    @property
+    def user(self) -> User | None:
+        """Return the current request user from serializer context."""
+        context = self.context
+        return context.get('user')
+
+    @override
+    def get_queryset(self) -> QuerySet:
+        """Return queryset filtered to the authenticated request user."""
+        user = self.user
+        assert user is not None
+        queryset = cast(QuerySet, super().get_queryset())
+        return queryset.filter(user=user)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -220,8 +240,6 @@ class ItemsSerializer(serializers.Serializer):
             result = [int(part) for part in parts if part]
         except ValueError:
             raise serializers.ValidationError(_('All items must be integers.'))
-        if not result:
-            raise serializers.ValidationError(_('Empty number list.'))
         return result
 
 
@@ -562,5 +580,12 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ('id', 'state', 'items')
+        fields = ('id', 'state', 'contact', 'items')
         read_only_fields = ('id', 'state')
+
+
+class PlaceOrderSerializer(serializers.Serializer):
+    """Serializer for placing an order from a basket."""
+
+    id = UserFilteredPrimaryKeyField(queryset=Basket.objects)
+    contact = UserFilteredPrimaryKeyField(queryset=Contact.objects)

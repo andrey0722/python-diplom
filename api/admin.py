@@ -205,7 +205,7 @@ class ShopOfferAdmin(admin.ModelAdmin):
         'price',
         'discount',
         'quantity',
-        'shop_is_active',
+        'is_active',
     )
     list_filter = ('shop__name',)
     search_fields = ('shop__name', 'product__name', 'part_number')

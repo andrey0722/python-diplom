@@ -29,11 +29,12 @@ from .filters import ShopOfferFilter
 from .mixins import FilterByIdsListMixin
 from .mixins import GetObjectByAuthUserMixin
 from .mixins import GetQuerySetByAuthUserMixin
+from .models import Basket
 from .models import Category
 from .models import Contact
-from .models import Order
 from .models import OrderItem
 from .models import OrderState
+from .models import PlacedOrder
 from .models import Shop
 from .models import ShopOffer
 from .models import Token
@@ -44,6 +45,7 @@ from .serializers import EmailConfirmSerializer
 from .serializers import IdSerializer
 from .serializers import OrderSerializer
 from .serializers import PasswordResetConfirmSerializer
+from .serializers import PlaceOrderSerializer
 from .serializers import SendEmailVerificationSerializer
 from .serializers import SendPasswordResetSerializer
 from .serializers import ShopOfferSerializer
@@ -56,6 +58,7 @@ from .serializers import VerificationSentSerializer
 from .services import add_to_basket
 from .services import check_email_verify_token
 from .services import check_password_reset_token
+from .services import checkout_basket
 from .services import edit_basket
 from .services import retry_get_url
 from .services import send_email_verification_mail
@@ -93,6 +96,14 @@ class SendVerificationView(GenericAPIView):
         raise NotImplementedError
 
     def post(self, request: Request) -> Response:
+        """Validate the request and send a verification email.
+
+        Args:
+            request (Request): The incoming request object.
+
+        Returns:
+            Response: Response containing verification status and token info.
+        """
         assert self.serializer_class is not None, 'Serializer is not set'
 
         data = validate_request(self.serializer_class, request)
@@ -414,7 +425,7 @@ class ShopStateView(
 class ShopListView(ListAPIView):
     """List view for shops with optional name filtering."""
 
-    queryset = Shop.objects.all()
+    queryset = Shop.objects.filter(is_active=True)
     serializer_class = ShopSerializer
     filterset_class = ShopFilter
 
@@ -430,7 +441,7 @@ class CategoryListView(ListAPIView):
 class ShopOfferListView(ListAPIView):
     """List view for shop offers with optional shop and category filtering."""
 
-    queryset = ShopOffer.objects.all()
+    queryset = ShopOffer.objects.filter(shop__is_active=True)
     serializer_class = ShopOfferSerializer
     filterset_class = ShopOfferFilter
 
@@ -442,7 +453,7 @@ class BasketView(
 ):
     """View for managing the user's shopping basket."""
 
-    queryset = Order.objects.filter(state=OrderState.BASKET)
+    queryset = Basket.objects
     serializer_class = OrderSerializer
     permission_classes = (IsAuthenticated,)
 
@@ -486,3 +497,24 @@ class BasketView(
         queryset = self.items_queryset.filter(order__user=self.request.user)
         self.filter_by_ids(queryset).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView):
+    """View for managing user orders and placing new orders."""
+
+    queryset = PlacedOrder.objects
+    serializer_class = OrderSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request: Request) -> Response:
+        """Create an order from the authenticated user's basket.
+
+        Args:
+            request (Request): The incoming request.
+
+        Returns:
+            Response: Confirmation that the order was placed.
+        """
+        data = validate_request(PlaceOrderSerializer, request)
+        checkout_basket(data['id'], data['contact'])
+        return Response(_('Order placed.'))

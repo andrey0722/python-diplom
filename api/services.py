@@ -18,16 +18,23 @@ from django.db import transaction
 from django.db.models import Model
 from django.http import HttpRequest
 from django.template.loader import render_to_string
+from django.utils.translation import gettext_lazy as _
 import httpx
 from rest_framework.request import Request
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 import yaml
 
+from .exceptions import BasketCheckoutError
 from .exceptions import BasketModifyError
+from .exceptions import ErrorDict
+from .exceptions import ErrorList
+from .exceptions import LazyErrorMessage
 from .exceptions import MissingIdsError
+from .exceptions import NotBasketCheckoutError
 from .exceptions import ShopUpdateError
 from .models import Category
+from .models import Contact
 from .models import Order
 from .models import OrderItem
 from .models import OrderState
@@ -78,6 +85,7 @@ def validate_view(
     view: APIView,
     /,
     raise_exception: bool = True,
+    **kwargs: object,
 ) -> dict[str, Any]:
     """Validate serializer data from a view request.
 
@@ -85,12 +93,18 @@ def validate_view(
         cls (type[BaseSerializer]): The serializer class to use.
         view (APIView): The view containing the request.
         raise_exception (bool): Whether to raise exception on invalid data.
+        kwargs (object): Fields for the serializer context.
 
     Returns:
         dict[str, Any]: The validated data.
     """
     request = cast(Request, view.request)
-    return validate_request(cls, request, raise_exception=raise_exception)
+    return validate_request(
+        cls,
+        request,
+        raise_exception=raise_exception,
+        **kwargs,
+    )
 
 
 def validate_request(
@@ -98,9 +112,22 @@ def validate_request(
     request: Request,
     /,
     raise_exception: bool = True,
+    **kwargs: object,
 ) -> dict[str, Any]:
+    """Validate serializer data from a DRF request object.
+
+    Args:
+        cls (type[BaseSerializer]): The serializer class to use.
+        request (Request): The DRF request containing the data.
+        raise_exception (bool): Whether to raise on invalid data.
+        kwargs (object): Fields for the serializer context.
+
+    Returns:
+        dict[str, Any]: The validated serializer data.
+    """
+    kwargs['user'] = request.user
     data = cast(dict[str, Any], request.data)
-    return validate_data(cls, data, raise_exception=raise_exception)
+    return validate_data(cls, data, raise_exception=raise_exception, **kwargs)
 
 
 def validate_data(
@@ -108,6 +135,7 @@ def validate_data(
     data: object,
     /,
     raise_exception: bool = True,
+    **kwargs: object,
 ) -> dict[str, Any]:
     """Validate data using the given serializer class.
 
@@ -115,11 +143,12 @@ def validate_data(
         cls (type[BaseSerializer]): The serializer class to use.
         data (object): The data to validate.
         raise_exception (bool): Whether to raise exception on invalid data.
+        kwargs (object): Fields for the serializer context.
 
     Returns:
         dict[str, Any]: The validated data.
     """
-    serializer: BaseSerializer = cls(data=data)
+    serializer: BaseSerializer = cls(data=data, context=kwargs)
     serializer.is_valid(raise_exception=raise_exception)
     return get_validated_data(serializer)
 
@@ -405,7 +434,7 @@ def send_email_verification_mail(  # noqa: PLR0913
         logger.info('User %s already confirmed', user.email)
         return None
 
-    email = user.email
+    email = cast(str, user.email)
     request_type = 'POST'
     token = email_verify_token_gen.make_token(user)
     data = format_request_data(
@@ -463,7 +492,7 @@ def send_password_reset_mail(  # noqa: PLR0913
         logger.info('User %s is inactive', user.email)
         return None
 
-    email = user.email
+    email = cast(str, user.email)
     request_type = 'POST'
     token = password_reset_token_gen.make_token(user)
     data = format_request_data(
@@ -698,7 +727,7 @@ def add_to_basket(user: User, request: Request) -> None:
     try:
         _add_to_basket_impl(user, data)
     except DatabaseError as e:
-        logger.exception('Add to basket error error')
+        logger.exception('Add to basket error')
         raise BasketModifyError from e
 
 
@@ -746,7 +775,7 @@ def edit_basket(user: User, request: Request) -> None:
     try:
         _edit_basket_impl(user, data)
     except DatabaseError as e:
-        logger.exception('Edit basket error error')
+        logger.exception('Edit basket error')
         raise BasketModifyError from e
 
 
@@ -759,7 +788,7 @@ def _edit_basket_impl(user: User, data: dict[str, Any]) -> None:
 
     Args:
         user (User): The user whose basket is being updated.
-        data (dict[str, Any]): Validated data containing items with new quantities.
+        data (dict[str, Any]): Validated data with new quantities.
     """
     basket = get_or_create_model(Order, user=user, state=OrderState.BASKET)
     order_items = locate_model_items(OrderItem, data['items'], order=basket)
@@ -768,3 +797,81 @@ def _edit_basket_impl(user: User, data: dict[str, Any]) -> None:
         order_item = order_items[item['id']]
         order_item.quantity = item['quantity']
         order_item.save()
+
+
+@transaction.atomic
+def checkout_basket(basket: Order, contact: Contact) -> None:
+    """Perform basket checkout by validating and converting a basket order.
+
+    This function locks the basket and related shop offers, validates that
+    all requested quantities are available, and then converts the basket to a
+    placed order while deducting inventory quantities.
+
+    Args:
+        basket (Order): The basket order to checkout.
+        contact (Contact): The contact information for the order.
+
+    Raises:
+        NotBasketCheckoutError: If the provided order is not a basket.
+        BasketCheckoutError: Unable to checkout the provided basket.
+    """
+    # Lock the parent order object
+    basket = Order.objects.select_for_update().get(pk=basket.pk)
+    if basket.state != OrderState.BASKET:
+        raise NotBasketCheckoutError
+    items = list(basket.items.all())
+
+    # Lock all the shop offers
+    offer_ids = {item.shop_offer_id for item in items}
+    offers = {
+        offer.pk: offer
+        for offer in (
+            ShopOffer.objects.select_for_update().filter(pk__in=offer_ids)
+        )
+    }
+
+    errors = ErrorDict()
+
+    for item in items:
+        offer = offers[item.shop_offer_id]
+        item_errors = ErrorList()
+
+        if not offer.is_active:
+            item_errors.append(
+                LazyErrorMessage(
+                    _('Item {item}: Shop offer {offer} is inactive.'),
+                    item=item.pk,
+                    offer=offer.pk,
+                )
+            )
+
+        if item.quantity > offer.quantity:
+            item_errors.append(
+                LazyErrorMessage(
+                    _(
+                        'Item {item}: Quantity {value} exceeds '
+                        'the maximum of {max} available.'
+                    ),
+                    item=item.pk,
+                    value=item.quantity,
+                    max=offer.quantity,
+                )
+            )
+
+        if item_errors:
+            errors['items'] += item_errors
+
+    if errors:
+        raise BasketCheckoutError(errors)
+
+    order = create_model(
+        Order,
+        user=basket.user,
+        contact=contact,
+        state=OrderState.NEW,
+    )
+    for item in items:
+        offer = offers[item.shop_offer_id]
+        offer.quantity -= item.quantity
+        offer.save()
+    order.items.set(basket.items.all())
