@@ -1,0 +1,26 @@
+{% extends "api/email_base.html" %}
+{% load i18n %}{% autoescape off %}
+{% block title %}{% translate "Order created" %}{% endblock %}
+
+{% block content %}
+    <h1 class="email-title">{% translate "Order created" %}</h1>
+    <p class="email-text">
+        {% blocktranslate %}
+        Your order <strong>#{{ order_id }}</strong>
+        at {{ site_name }} has been created successfully.
+        {% endblocktranslate %}
+    </p>
+    <p class="email-instruction">
+        {% translate "View your order details using the link below:" %}
+    </p>
+    <pre class="email-code"><a href="{{ order_url }}">{{ order_url }}</a></pre>
+    <p class="email-note">
+        {% translate "You will receive updates when the order status changes." %}
+    </p>
+    <p class="email-user">
+        {% blocktranslate %}
+        Order <strong>#{{ order_id }}</strong> is now placed.
+        {% endblocktranslate %}
+    </p>
+{% endblock %}
+{% endautoescape %}

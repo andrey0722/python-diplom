@@ -40,4 +40,5 @@ urlpatterns = [
     path('products', ShopOfferListView.as_view()),
     path('basket', BasketView.as_view()),
     path('order', UserOrderView.as_view()),
+    path('order/<pk>', UserOrderView.as_view(), name='order'),
 ]

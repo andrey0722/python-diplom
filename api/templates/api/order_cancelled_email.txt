@@ -1,0 +1,16 @@
+{% extends "api/email_base.txt" %}
+{% load i18n %}{% autoescape off %}
+{% block body %}
+{% translate "Order cancelled" %}
+
+{% blocktranslate %}Your order #{{ order_id }} at {{ site_name }} has been cancelled.{% endblocktranslate %}
+
+{% translate "View the cancelled order details using the link below:" %}
+{{ protocol }}://{{ domain }}{% url 'order' order_id %}
+
+{% translate "If you have questions about this cancellation, please contact customer support." %}
+
+{% blocktranslate %}Order #{{ order_id }} is now cancelled.{% endblocktranslate %}
+{% endblock %}
+
+{% endautoescape %}

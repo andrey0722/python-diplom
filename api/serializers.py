@@ -504,7 +504,8 @@ class JsonListField(serializers.ListField):
     def to_internal_value(self, data: Any) -> list[Any]:
         """Convert JSON string or list to internal list representation.
 
-        Preprocesses the data to remove trailing commas and parses JSON strings.
+        Preprocesses the data to remove trailing commas and parses
+        JSON strings.
 
         Args:
             data (Any): The input data (JSON string or list).

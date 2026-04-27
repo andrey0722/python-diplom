@@ -1,0 +1,16 @@
+{% extends "api/email_base.txt" %}
+{% load i18n %}{% autoescape off %}
+{% block body %}
+{% translate "Order created" %}
+
+{% blocktranslate %}Your order #{{ order_id }} at {{ site_name }} has been created successfully.{% endblocktranslate %}
+
+{% translate "View your order details using the link below:" %}
+{{ protocol }}://{{ domain }}{% url 'order' order_id %}
+
+{% translate "You will receive updates when the order status changes." %}
+
+{% blocktranslate %}Order #{{ order_id }} is now placed.{% endblocktranslate %}
+{% endblock %}
+
+{% endautoescape %}

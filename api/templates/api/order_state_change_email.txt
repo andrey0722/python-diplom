@@ -1,0 +1,18 @@
+{% extends "api/email_base.txt" %}
+{% load i18n %}{% autoescape off %}
+{% block body %}
+{% translate "Order status updated" %}
+
+{% blocktranslate %}Your order #{{ order_id }} at {{ site_name }} has changed to {{ order_state }}.{% endblocktranslate %}
+
+{% translate "This notification keeps you informed of the latest order status." %}
+
+{% translate "View the order details by clicking the link below:" %}
+{{ protocol }}://{{ domain }}{% url 'order' order_id %}
+
+{% translate "If you did not expect this update, please contact customer support." %}
+
+{% blocktranslate %}Order #{{ order_id }} is now {{ order_state }}.{% endblocktranslate %}
+{% endblock %}
+
+{% endautoescape %}

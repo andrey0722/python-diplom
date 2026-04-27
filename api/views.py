@@ -499,7 +499,7 @@ class BasketView(
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView):
+class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView, RetrieveAPIView):
     """View for managing user orders and placing new orders."""
 
     queryset = PlacedOrder.objects
@@ -516,5 +516,5 @@ class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView):
             Response: Confirmation that the order was placed.
         """
         data = validate_request(PlaceOrderSerializer, request)
-        checkout_basket(data['id'], data['contact'])
+        checkout_basket(request, data['id'], data['contact'])
         return Response(_('Order placed.'))

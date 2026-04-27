@@ -1,0 +1,142 @@
+{% load i18n %}{% autoescape off %}
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}{% endblock %}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            color: #111111;
+            background: #f6f6f6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .email-container {
+            min-height: 100vh;
+        }
+
+        .email-wrapper {
+            padding: 24px;
+            text-align: left;
+        }
+
+        .email-card {
+            background: #ffffff;
+            border: 1px solid #e5e5e5;
+            border-radius: 10px;
+            overflow: hidden;
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .email-content {
+            padding: 32px;
+        }
+
+        .email-title {
+            font-size: 22px;
+            margin: 0 0 16px;
+        }
+
+        .email-text,
+        .email-instruction,
+        .email-note,
+        .email-user,
+        .email-signature {
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .email-text,
+        .email-note,
+        .email-user {
+            margin: 0 0 18px;
+        }
+
+        .email-instruction {
+            margin: 0 0 12px;
+        }
+
+        .email-code {
+            background: #f4f4f4;
+            padding: 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow-x: auto;
+            margin: 0 0 20px;
+        }
+
+        .email-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 0 20px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .email-items-table th,
+        .email-items-table td {
+            border: 1px solid #e5e5e5;
+            padding: 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .email-items-table thead th,
+        .email-items-table tfoot th,
+        .email-items-table tfoot td {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+
+        .email-items-table .email-number {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .email-signature {
+            margin: 0;
+        }
+
+        a {
+            color: #1d70b8;
+            word-break: break-all;
+        }
+
+        .email-highlight-badge {
+            background-color: #f5f5f5;
+            border: 1px solid #efefef;
+            border-radius: 3px;
+            padding: 2px 6px;
+            color: #333;
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" class="email-container">
+        <tr>
+            <td class="email-wrapper">
+                <table cellpadding="0" cellspacing="0" border="0" class="email-card">
+                    <tr>
+                        <td class="email-content">
+                            {% block content %}{% endblock %}
+                            <p class="email-signature">
+                                {% include "api/email_signature.txt" %}
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>
+{% endautoescape %}

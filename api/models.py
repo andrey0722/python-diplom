@@ -465,7 +465,7 @@ class Order(models.Model):
         verbose_name_plural = _('orders')
         constraints = (
             models.UniqueConstraint(
-                fields=('state',),
+                fields=('user', 'state'),
                 condition=IS_BASKET,
                 name='uq_order_single_basket',
             ),

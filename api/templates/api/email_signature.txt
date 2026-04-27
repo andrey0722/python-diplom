@@ -1,0 +1,1 @@
+{% load i18n %}{% autoescape off %}{% blocktranslate %}The {{ site_name }} team{% endblocktranslate %}{% endautoescape %}

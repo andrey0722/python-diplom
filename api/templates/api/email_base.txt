@@ -1,0 +1,6 @@
+{% load i18n %}{% autoescape off %}
+{% block body %}{% endblock %}
+{% block signature %}
+{% include "api/email_signature.txt" %}
+{% endblock %}
+{% endautoescape %}

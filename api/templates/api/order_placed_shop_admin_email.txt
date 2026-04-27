@@ -1,0 +1,23 @@
+{% extends "api/email_base.txt" %}
+{% load i18n %}{% autoescape off %}
+{% block body %}
+{% translate "New shop order received" %}
+
+{% blocktranslate %}A new order #{{ order_id }} containing items from {{ shop_name }} has been placed on {{ site_name }}.{% endblocktranslate %}
+
+{% if items %}
+{% translate "Order items:" %}
+{% translate "Part number" %} | {% translate "Product" %} | {% translate "Model" %} | {% translate "Price" %} | {% translate "Quantity" %} | {% translate "Sum" %}
+{% for item in items %}
+{{ item.shop_offer.part_number }} | {{ item.product_name }} | {{ item.shop_offer.model }} | {{ item.price }} | {{ item.quantity }} | {{ item.sum }}
+{% endfor %}
+{% translate "Total" %}: {{ total_sum }}
+{% endif %}
+
+{% translate "View the order details from the link below:" %}
+{{ protocol }}://{{ domain }}{% url 'order' order_id %}
+
+{% translate "Please process the shop items according to your order workflow." %}
+{% endblock %}
+
+{% endautoescape %}

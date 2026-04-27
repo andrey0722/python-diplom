@@ -1,15 +1,18 @@
-from typing import override
+from typing import Any, override
 
 from admin_extra_buttons.decorators import button
 from admin_extra_buttons.mixins import ExtraButtonsMixin
 from django.contrib import admin
 from django.contrib import messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import F
 from django.db.models import IntegerField
 from django.db.models import Model
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
+from django.forms import ModelForm
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import HttpResponseRedirect
@@ -21,6 +24,8 @@ from django.utils.translation import gettext_lazy as _
 from .exceptions import ApplicationError
 from .exceptions import ErrorDict
 from .exceptions import ErrorList
+from .forms import BasketAdminForm
+from .forms import OrderAdminForm
 from .forms import UserContactSelectForm
 from .models import Basket
 from .models import Category
@@ -36,6 +41,7 @@ from .models import ShopOffer
 from .models import Token
 from .models import User
 from .services import checkout_basket
+from .services import notify_order_state_on_commit
 
 
 def get_admin_view(
@@ -126,6 +132,7 @@ class UserAdmin(BaseUserAdmin):
     """Django admin configuration for User model."""
 
     list_display = (
+        'id',
         'email',
         'full_name',
         'last_login',
@@ -133,6 +140,7 @@ class UserAdmin(BaseUserAdmin):
         'is_active',
         'is_staff',
     )
+    list_display_links = ('id', 'email')
     list_editable = ('is_active',)
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
@@ -298,6 +306,7 @@ class ShopOfferAdmin(admin.ModelAdmin):
     """Admin configuration for ShopOffer model."""
 
     list_display = (
+        'id',
         'product',
         'shop',
         'part_number',
@@ -307,7 +316,7 @@ class ShopOfferAdmin(admin.ModelAdmin):
         'is_active',
     )
     list_filter = ('shop__name',)
-    search_fields = ('shop__name', 'product__name', 'part_number')
+    search_fields = ('id', 'shop__name', 'product__name', 'part_number')
     inlines = (ProductParametersInline,)
     save_on_top = True
 
@@ -350,6 +359,7 @@ class BaseOrderAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
     )
+    list_display_links = ('id', 'user')
     list_filter = ('state',)
     search_fields = ('id', f'user__{User.USERNAME_FIELD}')
     inlines = (OrderItemsInline,)
@@ -388,6 +398,30 @@ class BaseOrderAdmin(admin.ModelAdmin):
 class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
     """Admin configuration for Basket model."""
 
+    form = BasketAdminForm
+    readonly_fields_on_change = ('user',)
+
+    @override
+    def get_readonly_fields(
+        self,
+        request: HttpRequest,
+        obj: Model | None = None,
+    ):
+        """Make basket owner read-only when editing an existing basket.
+
+        Args:
+            request (HttpRequest): The current admin request.
+            obj (Model | None): The basket being edited, if any.
+
+        Returns:
+            object: Read-only field names for the current admin view.
+        """
+        result = super().get_readonly_fields(request, obj)
+        if obj is not None:
+            # Model change view
+            result = tuple(result) + tuple(self.readonly_fields_on_change)
+        return result
+
     @button(
         label=_('Checkout basket'),
         html_attrs={
@@ -419,7 +453,7 @@ class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
             if form.is_valid():
                 contact: Contact = form.cleaned_data['contact']
                 try:
-                    checkout_basket(basket, contact)
+                    checkout_basket(request, basket, contact)
                 except Exception as e:
                     error_message(request, e)
                 else:
@@ -439,3 +473,59 @@ class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
 @admin.register(PlacedOrder)
 class OrderAdmin(BaseOrderAdmin):
     """Admin configuration for PlacedOrder model."""
+
+    form = OrderAdminForm
+    readonly_fields = ('user',)
+
+    @override
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        """Disable manual creation of placed orders in admin.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            bool: Always False.
+        """
+        return False
+
+    @override
+    def add_view(
+        self,
+        request: HttpRequest,
+        form_url: str = '',
+        extra_context: dict[str, Any] | None = None,
+    ):
+        """Reject direct access to the placed order add view.
+
+        Args:
+            request (HttpRequest): The current admin request.
+            form_url (str): The add form URL path.
+            extra_context (dict[str, Any] | None): Extra template context.
+
+        Raises:
+            PermissionDenied: Always raised for this admin view.
+        """
+        raise PermissionDenied
+
+    @override
+    def save_model(
+        self,
+        request: HttpRequest,
+        obj: PlacedOrder,
+        form: ModelForm,
+        change: bool,
+    ) -> None:
+        """Save an order and notify on committed state changes.
+
+        Args:
+            request (HttpRequest): The current admin request.
+            obj (PlacedOrder): The placed order being saved.
+            form (ModelForm): The submitted order form.
+            change (bool): Whether an existing object is being changed.
+        """
+        status_changed = change and 'state' in form.changed_data
+        with transaction.atomic():
+            super().save_model(request, obj, form, change)
+            if status_changed:
+                notify_order_state_on_commit(request, obj.pk)

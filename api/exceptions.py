@@ -1,11 +1,14 @@
 from collections import defaultdict
 from collections.abc import Iterable
 
+from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext import StrPromise
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.exceptions import NotFound
+
+from .models import OrderState
 
 
 class MissingIdsError(NotFound):
@@ -59,7 +62,7 @@ class BasketModifyError(APIException):
     default_code = 'basket_modify_error'
 
 
-class LazyErrorMessage:
+class LazyErrorMessage(Promise):
     """Error message class with lazy formatting."""
 
     def __init__(self, message: 'ErrorMessage', **params: object) -> None:
@@ -96,7 +99,8 @@ class ErrorDict(defaultdict[str, ErrorList]):
         super().__init__(ErrorList, *args, **kwargs)
 
 
-type ErrorDetail = ErrorMessage | ErrorList | ErrorDict
+type ErrorDetail = ErrorMessage | ErrorList | ErrorDict | None
+type ErrorCode = str | None
 
 
 class ApplicationError(Exception):
@@ -105,12 +109,12 @@ class ApplicationError(Exception):
     default_detail = _('An application error occurred.')
     default_code = 'application_error'
 
-    def __init__(self, detail: ErrorDetail | None = None, code: object = None):
+    def __init__(self, detail: ErrorDetail = None, code: ErrorCode = None):
         """Initialize an exception with detail and code.
 
         Args:
-            detail (ErrorDetail | None): The error detail payload.
-            code (object, optional): The error code.
+            detail (ErrorDetail): The error detail payload.
+            code (ErrorCode): The error code.
         """
         self.detail = self.default_detail if detail is None else detail
         self.code = self.default_code if code is None else code
@@ -129,3 +133,29 @@ class NotBasketCheckoutError(BasketCheckoutError):
 
     default_detail = _('Not a basket. Only basket can be checked out.')
     default_code = 'not_basket_checkout_error'
+
+
+class InvalidOrderStateTransitionError(ApplicationError):
+    """Unable to change order state in this direction."""
+
+    default_code = 'invalid_order_state_transition_error'
+
+    def __init__(
+        self,
+        old: OrderState,
+        new: OrderState,
+        code: ErrorCode = None,
+    ):
+        """Initialize the error with source and target order states.
+
+        Args:
+            old (OrderState): The current order state.
+            new (OrderState): The requested order state.
+            code (ErrorCode): Optional error code override.
+        """
+        detail = LazyErrorMessage(
+            _('Cannot change order state from {old!r} to {new!r}'),
+            old=old,
+            new=new,
+        )
+        super().__init__(detail, code)

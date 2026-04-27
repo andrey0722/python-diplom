@@ -1,122 +1,32 @@
+{% extends "api/email_base.html" %}
 {% load i18n %}{% autoescape off %}
-<!DOCTYPE html>
-<html>
+{% block title %}{% translate "Verify your email address" %}{% endblock %}
 
-<head>
-    <meta charset="UTF-8" />
-    <title>{% translate "Verify your email address" %}</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            color: #111111;
-            background: #f6f6f6;
-            margin: 0;
-            padding: 0;
-        }
-        .email-container {
-            min-height: 100vh;
-        }
-        .email-wrapper {
-            padding: 24px;
-            text-align: left;
-        }
-        .email-card {
-            background: #ffffff;
-            border: 1px solid #e5e5e5;
-            border-radius: 10px;
-            overflow: hidden;
-            max-width: 600px;
-            width: 100%;
-            margin: 0 auto;
-        }
-        .email-content {
-            padding: 32px;
-        }
-        .email-title {
-            font-size: 22px;
-            margin: 0 0 16px;
-        }
-        .email-text {
-            margin: 0 0 18px;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .email-instruction {
-            margin: 0 0 12px;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .email-code {
-            background: #f4f4f4;
-            padding: 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            line-height: 1.5;
-            overflow-x: auto;
-            margin: 0 0 20px;
-        }
-        .email-note {
-            margin: 0 0 18px;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .email-user {
-            margin: 0 0 30px;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .email-thanks {
-            margin: 0 0 4px;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .email-signature {
-            margin: 0;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-    </style>
-</head>
-
-<body>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" class="email-container">
-        <tr>
-            <td class="email-wrapper">
-                <table cellpadding="0" cellspacing="0" border="0" class="email-card">
-                    <tr>
-                        <td class="email-content">
-                            <h1 class="email-title">
-                                {% translate "Verify your email address" %}
-                            </h1>
-                            <p class="email-text">
-                                {% blocktranslate %}
-                                Please verify your email address to complete your
-                                account registration at {{ site_name }}.
-                                {% endblocktranslate %}
-                            </p>
-                            <p class="email-text">
-                                {% translate "Your confirmation token:" %}
-                            </p>
-                            <pre class="email-code">{{ token }}</pre>
-                            <p class="email-instruction">
-                                {% translate "Send the following HTTP request to confirm your email:" %}</p>
-                            <pre class="email-code">{{ request_type }} {{ protocol }}://{{ domain }}{% url 'email-confirm' %}{% if request_data %}<br>{{ request_data }}{% endif %}</pre>
-                            <p class="email-note">
-                                {% translate "If you did not request this verification, you can ignore this message." %}
-                            </p>
-                            <p class="email-user">
-                                {% blocktranslate %}This verification was generated for {{ email }}.{% endblocktranslate %}
-                            </p>
-                            <p class="email-signature">
-                                {% blocktranslate %}The {{ site_name }} team{% endblocktranslate %}
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-
-</html>
+{% block content %}
+    <h1 class="email-title">{% translate "Verify your email address" %}</h1>
+    <p class="email-text">
+        {% blocktranslate %}
+        Please verify your email address to complete your account registration at
+        {{ site_name }}.
+        {% endblocktranslate %}
+    </p>
+    <p class="email-text">{% translate "Your confirmation token:" %}</p>
+    <pre class="email-code">{{ token }}</pre>
+    <p class="email-instruction">
+        {% blocktranslate %}
+        Send the following HTTP request to confirm your email:
+        {% endblocktranslate %}
+    </p>
+    <pre class="email-code">{{ request_type }} <a href="{{ request_url }}">{{ request_url }}</a>{% if request_data %}<br>{{ request_data }}{% endif %}</pre>
+    <p class="email-note">
+        {% blocktranslate %}
+        If you did not request this verification, you can ignore this message.
+        {% endblocktranslate %}
+    </p>
+    <p class="email-user">
+        {% blocktranslate %}
+        This verification was generated for {{ email }}.
+        {% endblocktranslate %}
+    </p>
+{% endblock %}
 {% endautoescape %}
