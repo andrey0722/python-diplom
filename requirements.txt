@@ -1,5 +1,6 @@
 django~=6.0.3
 django-environ~=0.13.0
+django-admin-extra-buttons~=2.1.2
 django-filter~=25.2
 django-model-utils~=5.0.0
 django-phonenumber-field[phonenumbers]~=8.4.0

@@ -2,10 +2,15 @@ import functools
 from typing import TYPE_CHECKING, Final, override
 
 from django.contrib import admin
+from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.models import UserManager as BaseUserManager
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import ExpressionWrapper
+from django.db.models import F
+from django.db.models import IntegerField
 from django.db.models import Q
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
@@ -53,6 +58,9 @@ class UserManager(BaseUserManager):
     def create_superuser(self, *args, **kwargs):
         """Create superuser with dummy username."""
         return super().create_superuser(DUMMY_USERNAME, *args, **kwargs)
+
+
+type AnyUser = AbstractBaseUser | AnonymousUser
 
 
 class User(AbstractUser):
@@ -449,6 +457,7 @@ class Order(models.Model):
 
     if TYPE_CHECKING:
         user_id: object
+        total_sum_value: int
         items: RelatedManager['OrderItem']
 
     class Meta:
@@ -486,6 +495,11 @@ class Order(models.Model):
             raise ValidationError(
                 {'contact': _('Contact must belong to the same user.')}
             )
+
+    @property
+    def total_sum(self) -> int:
+        """Calculate the total sum of all order items."""
+        return sum(x.sum for x in self.items.all())
 
 
 class Basket(Order):
@@ -542,3 +556,39 @@ class OrderItem(models.Model):
             str: Formatted order item string.
         """
         return f'{self.order} │ Item #{self.pk}'
+
+    @property
+    @admin.display(
+        description=_('Shop'),
+        ordering='shop_offer__shop__name',
+    )
+    def shop_name(self) -> str:
+        """Get the name of the shop in this order item."""
+        return self.shop_offer.shop.name
+
+    @property
+    @admin.display(
+        description=_('Product'),
+        ordering='shop_offer__product__name',
+    )
+    def product_name(self) -> str:
+        """Get the name of the product in this order item."""
+        return self.shop_offer.product.name
+
+    @property
+    @admin.display(description=_('Price'), ordering='shop_offer__price')
+    def price(self) -> int:
+        """Get the price of the shop offer for this item."""
+        return self.shop_offer.price
+
+    @property
+    @admin.display(
+        description=_('Total sum'),
+        ordering=ExpressionWrapper(
+            F('shop_offer__price') * F('quantity'),
+            output_field=IntegerField(),
+        ),
+    )
+    def sum(self) -> int:
+        """Calculate the total sum for this order item."""
+        return self.price * self.quantity

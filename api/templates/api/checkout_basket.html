@@ -1,0 +1,107 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}{% autoescape off %}
+
+{% block title %}{% translate "Basket checkout" %}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .items-table {
+        width: 100%;
+        border-collapse: collapse;
+        max-width: none;
+        table-layout: auto;
+    }
+
+    .display-form {
+        width: 100%;
+    }
+
+    .display-form p {
+        display: flex;
+        align-items: center;
+        width: 100%;
+    }
+
+    .display-form label {
+        flex: 0 0 100px;
+    }
+
+    .display-form input:not([type="checkbox"]):not([type="radio"]),
+    .display-form select,
+    .display-form textarea {
+        width: 100%;
+    }
+
+    .content-wrapper {
+        max-width: 100%;
+    }
+
+    .items-table th,
+    .items-table td {
+        overflow-wrap: anywhere;
+    }
+
+    .items-table tfoot th,
+    .items-table tfoot td {
+        font-weight: bold;
+        border-top: 2px solid var(--hairline-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="post">
+    {% csrf_token %}
+
+    <div class="inline-group content-wrapper">
+
+        <h1>{% translate "Select contact for delivery:" %}</h1>
+        <div class="display-form">{{ form.as_p }}</div>
+
+        <div class="tabular inline-related">
+            <fieldset class="module">
+                <h2>{% translate "Basket items" %}</h2>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>{% translate "Id" %}</th>
+                            <th>{% translate "Product" %}</th>
+                            <th>{% translate "Amount" %}</th>
+                            <th>{% translate "Price" %}</th>
+                            <th>{% translate "Sum" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in basket.items.all %}
+                        <tr>
+                            <td>{{ item.pk }}</td>
+                            <td>{{ item.product_name }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ item.price }}</td>
+                            <td>{{ item.sum }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5">{% translate "Basket is empty." %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="4">{% translate "Total" %}</th>
+                            <th>{{ basket.total_sum }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </fieldset>
+        </div>
+    </div>
+
+    <div class="submit-row">
+        <input type="submit" value="{% translate 'Checkout' %}" class="default">
+    </div>
+</form>
+{% endblock %}
+
+{% endautoescape %}
