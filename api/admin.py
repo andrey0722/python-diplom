@@ -614,14 +614,27 @@ class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
             if form.is_valid():
                 contact: Contact = form.cleaned_data['contact']
                 try:
-                    checkout_basket(basket, contact, request)
+                    order = checkout_basket(basket, contact, request)
                 except Exception as e:
                     error_message(request, e)
                 else:
                     messages.success(request, _('Order placed'))
+                    context = {
+                        'redirect_url': get_admin_view(
+                            PlacedOrder,
+                            'change',
+                            order.pk,
+                        ),
+                    }
+                    return TemplateResponse(
+                        request,
+                        'api/close_popup.html',
+                        context,
+                    )
                 return TemplateResponse(request, 'api/close_popup.html')
+        else:
+            form = UserContactSelectForm(user=user)
 
-        form = UserContactSelectForm(user=user)
         context = {
             **self.admin_site.each_context(request),
             'is_popup': True,

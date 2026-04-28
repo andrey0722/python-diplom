@@ -1177,7 +1177,7 @@ def checkout_basket(
     basket: Order,
     contact: Contact,
     notify_request: AnyRequest | None = None,
-) -> None:
+) -> Order:
     """Perform basket checkout by validating and converting a basket order.
 
     This function locks the basket and related shop offers, validates that
@@ -1189,6 +1189,9 @@ def checkout_basket(
         contact (Contact): The contact information for the order.
         notify_request (AnyRequest | None): Request used for notifications.
             If None then no notifications are performed.
+
+    Returns:
+        Order: The newly created placed order.
 
     Raises:
         NotBasketCheckoutError: If the provided order is not a basket.
@@ -1216,6 +1219,8 @@ def checkout_basket(
 
     if notify_request is not None:
         notify_order_state_on_commit(notify_request, order.pk)
+
+    return order
 
 
 @transaction.atomic

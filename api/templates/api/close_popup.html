@@ -3,10 +3,24 @@
 
 <body>
     <script>
+        const redirectUrl = '{{ redirect_url|default:""|escapejs }}';
+
         if (window.opener) {
-            window.opener.location.reload();
+            // We are in popup, manage original page location
+            if (redirectUrl) {
+                window.opener.location.href = redirectUrl;
+            } else {
+                window.opener.location.reload();
+            }
+            window.close();
+        } else {
+            // Not a popup, use the page itself
+            if (redirectUrl) {
+                window.location.href = redirectUrl;
+            } else {
+                window.close();
+            }
         }
-        window.close();
     </script>
 </body>
 
