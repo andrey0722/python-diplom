@@ -19,6 +19,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
 from .exceptions import ApplicationError
@@ -376,8 +377,25 @@ class OrderItemAdmin(DisableModelAddMixin, admin.ModelAdmin):
     )
     list_filter = ('order__state', 'shop_offer__shop__name')
     search_fields = ('id', 'order__id', f'order__user__{User.USERNAME_FIELD}')
-    readonly_fields = ('order',)
+    fields = ('order_admin_link', 'shop_offer', 'quantity')
+    readonly_fields = ('order_admin_link',)
     save_on_top = True
+
+    @admin.display(description=_('Order'))
+    def order_admin_link(self, obj: OrderItem) -> str:
+        """Return a link to the related order admin page.
+
+        Args:
+            obj (OrderItem): The order item displayed in admin.
+
+        Returns:
+            str: HTML link to the related order.
+        """
+        if obj.order_id is None:
+            return '-'
+        proxy_model = obj.order.proxy_model
+        url = get_admin_view(proxy_model, 'change', obj.order_id)
+        return format_html('<a href="{}">{}</a>', url, obj.order)
 
     @override
     def has_change_permission(

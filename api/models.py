@@ -502,6 +502,15 @@ class Order(models.Model):
         """Calculate the total sum of all order items."""
         return sum(x.sum for x in self.items.all())
 
+    @property
+    def proxy_model(self) -> type['Basket'] | type['PlacedOrder']:
+        """Return the proxy model matching the order state.
+
+        Returns:
+            type[Basket] | type[PlacedOrder]: Basket or placed order proxy.
+        """
+        return Basket if self.state == OrderState.BASKET else PlacedOrder
+
 
 class Basket(Order):
     """Proxy model for basket orders."""
