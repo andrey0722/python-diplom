@@ -248,6 +248,29 @@ def validation_codes_equal(data: dict[str, Any], field: str, *codes: str):
     return found_codes == expected_codes
 
 
+def fail_if_error(response: httpx.Response) -> None:
+    """Raise HTTP errors with the response body added to the message.
+
+    Args:
+        response (httpx.Response): The response to validate.
+
+    Raises:
+        HTTPStatusError: If the response status is not successful.
+    """
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        message: str = e.args[0]
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            data = response.text
+        else:
+            data = json.dumps(data, indent=4)
+        e.args = (f'{message}\n\n{data}',)
+        raise
+
+
 def register_user(session: httpx.Client, user: UserData) -> bool:
     """Register a new user via the API if they do not already exist.
 
@@ -262,7 +285,7 @@ def register_user(session: httpx.Client, user: UserData) -> bool:
             if validation_codes_equal(json, 'email', 'unique'):
                 # User already exists => no registration needed
                 return False
-        response.raise_for_status()
+        fail_if_error(response)
     return True
 
 
@@ -276,7 +299,7 @@ def verify_email(session: httpx.Client, email: str) -> None:
     # First request the email verification
     data = {'email': email}
     response = session.post(f'{API_ROOT}/user/register/verify', data=data)
-    response.raise_for_status()
+    fail_if_error(response)
     json: dict[str, Any] = response.json()
 
     # We might have the token itself in the response
@@ -291,14 +314,14 @@ def verify_email(session: httpx.Client, email: str) -> None:
     # Got the token, now can verify
     data['token'] = verify_token
     response = session.post(f'{API_ROOT}/user/register/confirm', data=data)
-    response.raise_for_status()
+    fail_if_error(response)
 
 
 def login_user(session: httpx.Client, email: str, password: str) -> str:
     """Authenticate a user and return an API token."""
     data = {'email': email, 'password': password}
     response = session.post(f'{API_ROOT}/user/login', data=data)
-    response.raise_for_status()
+    fail_if_error(response)
     json: dict[str, Any] = response.json()
     return json['token']
 
@@ -310,7 +333,7 @@ def get_contacts(
     """Retrieve the authenticated user's contact list."""
     headers = auth_header(user_token)
     response = session.get(f'{API_ROOT}/user/contact', headers=headers)
-    response.raise_for_status()
+    fail_if_error(response)
     return response.json()
 
 
@@ -327,7 +350,7 @@ def create_contact(
         data=data,
         headers=headers,
     )
-    response.raise_for_status()
+    fail_if_error(response)
     return response.json()
 
 
@@ -338,7 +361,7 @@ def get_products(
     """Fetch publicly available product listings, optionally authenticated."""
     headers = user_token and auth_header(user_token) or None
     response = session.get(f'{API_ROOT}/products', headers=headers)
-    response.raise_for_status()
+    fail_if_error(response)
     return response.json()
 
 
@@ -351,7 +374,7 @@ def get_basket(
     response = session.get(f'{API_ROOT}/basket', headers=headers)
     if response.status_code == httpx.codes.NOT_FOUND:
         return None
-    response.raise_for_status()
+    fail_if_error(response)
     return response.json()
 
 
@@ -364,7 +387,7 @@ def add_to_basket(
     data = {'items': json.dumps(items)}
     headers = auth_header(user_token)
     response = session.post(f'{API_ROOT}/basket', data=data, headers=headers)
-    response.raise_for_status()
+    fail_if_error(response)
     return response.json()
 
 
@@ -382,7 +405,7 @@ def delete_from_basket(
         data=data,
         headers=headers,
     )
-    response.raise_for_status()
+    fail_if_error(response)
 
 
 def place_order(
@@ -395,7 +418,7 @@ def place_order(
     data = {'id': order_id, 'contact': contact_id}
     headers = auth_header(user_token)
     response = session.post(f'{API_ROOT}/order', data=data, headers=headers)
-    response.raise_for_status()
+    fail_if_error(response)
     return response.json()
 
 
@@ -412,7 +435,7 @@ def update_shop_pricing(
         data=data,
         headers=headers,
     )
-    response.raise_for_status()
+    fail_if_error(response)
 
 
 def login(session: httpx.Client, user: UserData) -> str:
@@ -502,7 +525,7 @@ def empty_basket(session: httpx.Client, user_token: str) -> None:
 def fill_basket(session: httpx.Client, user_token: str) -> dict[str, Any]:
     """Fill the user's basket with a random selection of available offers."""
     offers = get_products(session, user_token)
-    offers = random.sample(offers, FILL_BASKET_SIZE)
+    offers = random.sample(offers, min(FILL_BASKET_SIZE, len(offers)))
     items = [
         {
             'product_info': offer['id'],
