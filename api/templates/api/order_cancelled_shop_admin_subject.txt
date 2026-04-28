@@ -1,0 +1,3 @@
+{% load i18n %}{% autoescape off %}{% blocktranslate %}
+Order #{{ order_id }} cancelled for {{ shop_name }} on {{ site_name }}
+{% endblocktranslate %}{% endautoescape %}

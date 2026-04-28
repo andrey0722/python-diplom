@@ -705,6 +705,13 @@ ORDER_PLACED_SHOP_ADMIN_TEMPLATES: Final = EmailTemplateSet(
 )
 
 
+ORDER_CANCELLED_SHOP_ADMIN_TEMPLATES: Final = EmailTemplateSet(
+    subject='api/order_cancelled_shop_admin_subject.txt',
+    text='api/order_cancelled_shop_admin_email.txt',
+    html='api/order_cancelled_shop_admin_email.html',
+)
+
+
 @functools.cache
 def get_notify_shop_templates(state: OrderState) -> EmailTemplateSet | None:
     """Return shop admin notification templates for the order state.
@@ -718,6 +725,8 @@ def get_notify_shop_templates(state: OrderState) -> EmailTemplateSet | None:
     """
     if state == OrderState.NEW:
         return ORDER_PLACED_SHOP_ADMIN_TEMPLATES
+    if state == OrderState.CANCELLED:
+        return ORDER_CANCELLED_SHOP_ADMIN_TEMPLATES
     return None
 
 

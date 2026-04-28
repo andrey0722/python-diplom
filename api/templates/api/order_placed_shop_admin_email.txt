@@ -15,7 +15,7 @@
 {% endif %}
 
 {% translate "View the order details from the link below:" %}
-{{ protocol }}://{{ domain }}{% url 'order' order_id %}
+{{ order_url }}
 
 {% translate "Please process the shop items according to your order workflow." %}
 {% endblock %}

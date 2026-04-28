@@ -17,7 +17,7 @@
 {% endif %}
 
 {% translate "View the order details by clicking the link below:" %}
-{{ protocol }}://{{ domain }}{% url 'order' order_id %}
+{{ order_url }}
 
 {% translate "If you did not expect this update, please contact customer support." %}
 

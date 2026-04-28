@@ -1,9 +1,9 @@
 {% extends "api/email_base.txt" %}
 {% load i18n %}{% autoescape off %}
 {% block body %}
-{% translate "Order cancelled" %}
+{% translate "Shop order cancelled" %}
 
-{% blocktranslate %}Your order #{{ order_id }} at {{ site_name }} has been cancelled.{% endblocktranslate %}
+{% blocktranslate %}Order #{{ order_id }} containing items from {{ shop_name }} has been cancelled on {{ site_name }}.{% endblocktranslate %}
 
 {% if items %}
 {% translate "Order items:" %}
@@ -14,12 +14,10 @@
 {% translate "Total" %}: {{ total_sum }}
 {% endif %}
 
-{% translate "View the cancelled order details using the link below:" %}
+{% translate "View the cancelled order details from the link below:" %}
 {{ order_url }}
 
-{% translate "If you have questions about this cancellation, please contact customer support." %}
-
-{% blocktranslate %}Order #{{ order_id }} is now cancelled.{% endblocktranslate %}
+{% translate "Please stop processing the shop items for this order." %}
 {% endblock %}
 
 {% endautoescape %}
