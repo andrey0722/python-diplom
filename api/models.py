@@ -278,6 +278,7 @@ class Shop(models.Model):
     is_active = models.BooleanField(_('active'), default=True)
 
     if TYPE_CHECKING:
+        user_id: object
         offers: RelatedManager['ShopOffer']
 
     class Meta:

@@ -8,6 +8,7 @@ from .views import SendEmailVerificationView
 from .views import SendPasswordResetView
 from .views import ShopListView
 from .views import ShopOfferListView
+from .views import ShopOrdersView
 from .views import ShopStateView
 from .views import ShopUpdateView
 from .views import UserContactsView
@@ -35,6 +36,8 @@ urlpatterns = [
     path('user/contact', UserContactsView.as_view()),
     path('partner/update', ShopUpdateView.as_view()),
     path('partner/state', ShopStateView.as_view()),
+    path('partner/orders', ShopOrdersView.as_view()),
+    path('partner/orders/<pk>', ShopOrdersView.as_view(), name='shop-order'),
     path('shops', ShopListView.as_view()),
     path('categories', CategoryListView.as_view()),
     path('products', ShopOfferListView.as_view()),

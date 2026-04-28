@@ -2,6 +2,10 @@ import logging
 from typing import Any, NoReturn, cast, override
 
 from django.contrib.auth.signals import user_logged_in
+from django.db.models import Exists
+from django.db.models import OuterRef
+from django.db.models import Prefetch
+from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 import httpx
@@ -42,9 +46,11 @@ from .models import Shop
 from .models import ShopOffer
 from .models import Token
 from .models import User
+from .permissions import UserOwnsShop
 from .serializers import CategorySerializer
 from .serializers import ContactSerializer
 from .serializers import EmailConfirmSerializer
+from .serializers import FilteredOrderSerializer
 from .serializers import IdSerializer
 from .serializers import OrderSerializer
 from .serializers import PasswordResetConfirmSerializer
@@ -410,7 +416,7 @@ class ShopStateView(
 
     queryset = Shop.objects
     serializer_class = ShopSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, UserOwnsShop)
 
     def post(self, request, *args, **kwargs):
         """Update the shop active state.
@@ -424,6 +430,39 @@ class ShopStateView(
             Response: Updated shop state.
         """
         return self.partial_update(request, *args, **kwargs)
+
+
+class ShopOrdersView(ListRetrieveModelMixin):
+    """View for shop owners to inspect orders containing their items."""
+
+    queryset = PlacedOrder.objects
+    serializer_class = FilteredOrderSerializer
+    permission_classes = (IsAuthenticated, UserOwnsShop)
+
+    @override
+    def get_queryset(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Return orders containing items from the current user's shop.
+
+        Returns:
+            QuerySet: Orders prefetched with only the shop's matching items.
+        """
+        user_id = self.request.user.pk
+
+        # Filter only order items from the current shop
+        items = OrderItem.objects.filter(shop_offer__shop__user_id=user_id)
+
+        # Exclude orders with no matched order items
+        items_not_empty = Exists(items.filter(order=OuterRef('pk')))
+
+        # Save filtered items to separate attribute for each order
+        filtered_items = Prefetch('items', items, to_attr='filtered_items')
+
+        queryset = cast(QuerySet, super().get_queryset())
+        return (
+            queryset.filter(items_not_empty)
+            .prefetch_related(filtered_items)
+            .order_by('pk')
+        )
 
 
 class ShopListView(ListAPIView):

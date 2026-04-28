@@ -584,6 +584,16 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'state')
 
 
+class FilteredOrderSerializer(OrderSerializer):
+    """Serializer for orders with shop-filtered item lists."""
+
+    items = OrderItemSerializer(
+        source='filtered_items',
+        many=True,
+        read_only=True,
+    )
+
+
 class PlaceOrderSerializer(serializers.Serializer):
     """Serializer for placing an order from a basket or canceled order."""
 

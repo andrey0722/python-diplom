@@ -779,7 +779,7 @@ def notify_order_state_shop_mail(
         # No need to notify any admins
         return
 
-    base_context = get_order_context(request, order, 'order')
+    base_context = get_order_context(request, order, 'shop-order')
     shops = (
         Shop.objects.filter(offers__order_items__order_id=order.pk)
         .distinct()
