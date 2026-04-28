@@ -542,6 +542,7 @@ class OrderItem(models.Model):
     quantity = models.PositiveIntegerField(_('quantity'))
 
     if TYPE_CHECKING:
+        order_id: object
         shop_offer_id: object
 
     class Meta:

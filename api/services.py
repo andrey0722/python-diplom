@@ -5,7 +5,7 @@ import functools
 import json
 import logging
 from pathlib import Path
-from typing import Any, Concatenate, Final, cast, override
+from typing import Any, Concatenate, Final, NamedTuple, cast, override
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
@@ -573,6 +573,7 @@ def notify_order_state_on_commit(
         request (AnyRequest): The request used to build email links.
         order_id (object): Primary key of the order to notify about.
     """
+
     def notify_callback() -> None:
         """Reload the order and send state notifications."""
         order = Order.objects.get(pk=order_id)
@@ -1033,32 +1034,57 @@ def _edit_basket_impl(user: User, data: dict[str, Any]) -> None:
         order_item.save()
 
 
-@transaction.atomic
-def checkout_basket(
-    request: AnyRequest,
-    basket: Order,
-    contact: Contact,
-) -> None:
-    """Perform basket checkout by validating and converting a basket order.
-
-    This function locks the basket and related shop offers, validates that
-    all requested quantities are available, and then converts the basket to a
-    placed order while deducting inventory quantities.
+def get_order_state(order_id: object) -> OrderState:
+    """Return the persisted state for an order ID.
 
     Args:
-        request (AnyRequest): The request object.
-        basket (Order): The basket order to checkout.
-        contact (Contact): The contact information for the order.
+        order_id (object): The order primary key.
 
-    Raises:
-        NotBasketCheckoutError: If the provided order is not a basket.
-        BasketCheckoutError: Unable to checkout the provided basket.
+    Returns:
+        OrderState: The order state stored in the database.
+    """
+    return Order.objects.only('state').get(pk=order_id).state
+
+
+def is_order_active(order_id: object) -> bool:
+    """Return whether an order ID refers to an active order.
+
+    Args:
+        order_id (object): The order primary key, or None.
+
+    Returns:
+        bool: True when the order is active.
+    """
+    if order_id is None:
+        return False
+    state = get_order_state(order_id)
+    return state in OrderState.active()
+
+
+type OrderItems = Iterable[OrderItem]
+type ShopOfferDict = dict[object, ShopOffer]
+
+
+class OrderData(NamedTuple):
+    """Locked order data used for stock-sensitive operations."""
+
+    order: Order
+    items: OrderItems
+    offers: ShopOfferDict
+
+
+def _lock_order_items(order: Order) -> OrderData:
+    """Lock an order with its items and related offers.
+
+    Args:
+        order (Order): The order to lock.
+
+    Returns:
+        OrderData: Locked order, items, and shop offers.
     """
     # Lock the parent order object
-    basket = Order.objects.select_for_update().get(pk=basket.pk)
-    if basket.state != OrderState.BASKET:
-        raise NotBasketCheckoutError
-    items = list(basket.items.all())
+    order = Order.objects.select_for_update().get(pk=order.pk)
+    items = list(OrderItem.objects.filter(order_id=order.pk))
 
     # Lock all the shop offers
     offer_ids = {item.shop_offer_id for item in items}
@@ -1068,7 +1094,19 @@ def checkout_basket(
             ShopOffer.objects.select_for_update().filter(pk__in=offer_ids)
         )
     }
+    return OrderData(order, items, offers)
 
+
+def _validate_basket_items(items: OrderItems, offers: ShopOfferDict) -> None:
+    """Validate basket items against active shops and available stock.
+
+    Args:
+        items (OrderItems): Basket items to validate.
+        offers (ShopOfferDict): Shop offers keyed by primary key.
+
+    Raises:
+        BasketCheckoutError: If any item cannot be checked out.
+    """
     errors = ErrorDict()
 
     for item in items:
@@ -1103,20 +1141,118 @@ def checkout_basket(
     if errors:
         raise BasketCheckoutError(errors)
 
+
+def _reserve_stock(items: OrderItems, offers: ShopOfferDict) -> None:
+    """Decrease stock quantities for order items.
+
+    Args:
+        items (OrderItems): Order items reserving stock.
+        offers (ShopOfferDict): Shop offers keyed by primary key.
+    """
+    update_offers: list[ShopOffer] = []
+    for item in items:
+        offer = offers[item.shop_offer_id]
+        offer.quantity -= item.quantity
+        update_offers.append(offer)
+    ShopOffer.objects.bulk_update(update_offers, ['quantity'])
+
+
+def _replenish_stock(items: OrderItems, offers: ShopOfferDict) -> None:
+    """Restore stock quantities for order items.
+
+    Args:
+        items (OrderItems): Order items returning stock.
+        offers (ShopOfferDict): Shop offers keyed by primary key.
+    """
+    update_offers: list[ShopOffer] = []
+    for item in items:
+        offer = offers[item.shop_offer_id]
+        offer.quantity += item.quantity
+        update_offers.append(offer)
+    ShopOffer.objects.bulk_update(update_offers, ['quantity'])
+
+
+@transaction.atomic
+def checkout_basket(
+    basket: Order,
+    contact: Contact,
+    notify_request: AnyRequest | None = None,
+) -> None:
+    """Perform basket checkout by validating and converting a basket order.
+
+    This function locks the basket and related shop offers, validates that
+    all requested quantities are available, and then converts the basket to a
+    placed order while deducting inventory quantities.
+
+    Args:
+        basket (Order): The basket order to checkout.
+        contact (Contact): The contact information for the order.
+        notify_request (AnyRequest | None): Request used for notifications.
+            If None then no notifications are performed.
+
+    Raises:
+        NotBasketCheckoutError: If the provided order is not a basket.
+        BasketCheckoutError: Unable to checkout the provided basket.
+    """
+    if basket.state != OrderState.BASKET:
+        raise NotBasketCheckoutError
+
+    basket, items, offers = _lock_order_items(basket)
+    _validate_basket_items(items, offers)
+
     order = create_model(
         Order,
         user=basket.user,
         contact=contact,
         state=OrderState.NEW,
     )
-    for item in items:
-        offer = offers[item.shop_offer_id]
-        offer.quantity -= item.quantity
-        offer.save()
-    order.items.set(basket.items.all())
 
-    # Notify about new order on success
-    notify_order_state_on_commit(request, order.pk)
+    _reserve_stock(items, offers)
+
+    # Move basket items to the created order
+    for item in items:
+        item.order_id = order.pk
+    OrderItem.objects.bulk_update(items, ['order_id'])
+
+    if notify_request is not None:
+        notify_order_state_on_commit(notify_request, order.pk)
+
+
+@transaction.atomic
+def change_order_state(
+    order: Order,
+    new_state: OrderState,
+    notify_request: AnyRequest | None = None,
+) -> None:
+    """Apply an allowed order state transition and update stock.
+
+    Cancelling an order replenishes reserved stock. Reopening a cancelled
+    order to the new state reserves stock again.
+
+    Args:
+        order (Order): The order to update.
+        new_state (OrderState): The requested target state.
+        notify_request (AnyRequest | None): Request used for notifications.
+            If None then no notifications are performed.
+
+    Raises:
+        InvalidOrderStateTransitionError: If the transition is not allowed.
+    """
+    old_state: OrderState = order.state
+    validate_order_state_transition(old_state, new_state)
+    order, items, offers = _lock_order_items(order)
+
+    # Update shop available stock
+    if new_state == OrderState.CANCELLED:
+        _replenish_stock(items, offers)
+    elif new_state == OrderState.NEW and old_state == OrderState.CANCELLED:
+        _reserve_stock(items, offers)
+
+    order.state = new_state
+    order.save()
+
+    if notify_request is not None:
+        notify_order_state_on_commit(notify_request, order.pk)
 
 
 _ALLOWED_ORDER_STATE_TRANSITIONS: Final[dict[OrderState, set[OrderState]]] = {

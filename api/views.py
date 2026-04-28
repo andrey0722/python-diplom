@@ -516,5 +516,5 @@ class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView, RetrieveAPIView):
             Response: Confirmation that the order was placed.
         """
         data = validate_request(PlaceOrderSerializer, request)
-        checkout_basket(request, data['id'], data['contact'])
+        checkout_basket(data['id'], data['contact'], request)
         return Response(_('Order placed.'))

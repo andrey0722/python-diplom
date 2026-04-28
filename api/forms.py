@@ -1,7 +1,9 @@
 from collections.abc import Iterable
-from typing import Any, cast
+from typing import Any, cast, override
 
 from django import forms
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 
 from .exceptions import InvalidOrderStateTransitionError
 from .models import AnyUser
@@ -10,7 +12,43 @@ from .models import Order
 from .models import OrderState
 from .models import User
 from .services import get_allowed_state_transitions
+from .services import is_order_active
 from .services import validate_order_state_transition
+
+
+class OrderItemInlineFormSet(forms.BaseInlineFormSet):
+    """Inline formset that locks items for active orders."""
+
+    @override
+    def clean(self) -> None:
+        """Reject item edits and deletions for active orders.
+
+        Raises:
+            ValidationError: If an active order item is changed or deleted.
+        """
+        super().clean()
+
+        order: Order = self.instance
+        if not is_order_active(order and order.pk):
+            return
+
+        for form in self.forms:
+            form: forms.Form
+
+            if not hasattr(form, 'cleaned_data'):
+                continue
+
+            if form.cleaned_data.get('DELETE'):
+                raise ValidationError(
+                    _('Unable to delete items of active order.'),
+                    code='order_items_locked',
+                )
+
+            if form.has_changed():
+                raise ValidationError(
+                    _('Unable to change items of active order.'),
+                    code='order_items_locked',
+                )
 
 
 class BasketAdminForm(forms.ModelForm):
