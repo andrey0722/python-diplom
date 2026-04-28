@@ -607,6 +607,32 @@ def get_order_context(
     }
 
 
+def get_order_user_context(
+    order: Order,
+    base_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build email context for all items in an order.
+
+    Args:
+        order (Order): The order containing shop items.
+        base_context (dict[str, Any] | None): Shared email context.
+
+    Returns:
+        dict[str, Any]: Context data for the user email.
+    """
+    items = list(
+        OrderItem.objects.filter(order=order)
+        .select_related('shop_offer__product')
+        .order_by('pk')
+    )
+    total_sum = sum(x.sum for x in items)
+    base_context = base_context or {}
+    return base_context | {
+        'items': items,
+        'total_sum': total_sum,
+    }
+
+
 ORDER_CREATED_TEMPLATES: Final = EmailTemplateSet(
     subject='api/order_created_subject.txt',
     text='api/order_created_email.txt',
@@ -668,6 +694,7 @@ def notify_order_state_user_mail(
     user = order.user
     email = cast(str, user.email)
     context = get_order_context(request, order, 'order')
+    context = get_order_user_context(order, context)
     render_and_send_mail(templates, context, email, from_email)
 
 

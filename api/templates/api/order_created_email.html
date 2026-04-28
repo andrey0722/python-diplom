@@ -10,6 +10,38 @@
         at {{ site_name }} has been created successfully.
         {% endblocktranslate %}
     </p>
+    {% if items %}
+    <table class="email-items-table" cellpadding="0" cellspacing="0" border="0">
+        <thead>
+            <tr>
+                <th scope="col" class="email-number">{% translate "Part number" %}</th>
+                <th scope="col">{% translate "Product" %}</th>
+                <th scope="col">{% translate "Model" %}</th>
+                <th scope="col" class="email-number">{% translate "Price" %}</th>
+                <th scope="col" class="email-number">{% translate "Quantity" %}</th>
+                <th scope="col" class="email-number">{% translate "Sum" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td class="email-number">{{ item.shop_offer.part_number }}</td>
+                <td>{{ item.product_name }}</td>
+                <td>{{ item.shop_offer.model }}</td>
+                <td class="email-number">{{ item.price }}</td>
+                <td class="email-number">{{ item.quantity }}</td>
+                <td class="email-number">{{ item.sum }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <th scope="row" colspan="5">{% translate "Total" %}</th>
+                <td class="email-number">{{ total_sum }}</td>
+            </tr>
+        </tfoot>
+    </table>
+    {% endif %}
     <p class="email-instruction">
         {% translate "View your order details using the link below:" %}
     </p>

@@ -7,6 +7,15 @@
 
 {% translate "This notification keeps you informed of the latest order status." %}
 
+{% if items %}
+{% translate "Order items:" %}
+{% translate "Part number" %} | {% translate "Product" %} | {% translate "Model" %} | {% translate "Price" %} | {% translate "Quantity" %} | {% translate "Sum" %}
+{% for item in items %}
+{{ item.shop_offer.part_number }} | {{ item.product_name }} | {{ item.shop_offer.model }} | {{ item.price }} | {{ item.quantity }} | {{ item.sum }}
+{% endfor %}
+{% translate "Total" %}: {{ total_sum }}
+{% endif %}
+
 {% translate "View the order details by clicking the link below:" %}
 {{ protocol }}://{{ domain }}{% url 'order' order_id %}
 
