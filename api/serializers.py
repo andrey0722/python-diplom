@@ -9,7 +9,6 @@ from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from .models import Basket
 from .models import Category
 from .models import Contact
 from .models import Order
@@ -586,7 +585,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class PlaceOrderSerializer(serializers.Serializer):
-    """Serializer for placing an order from a basket."""
+    """Serializer for placing an order from a basket or canceled order."""
 
-    id = UserFilteredPrimaryKeyField(queryset=Basket.objects)
+    id = UserFilteredPrimaryKeyField(queryset=Order.inactive)
     contact = UserFilteredPrimaryKeyField(queryset=Contact.objects)

@@ -1263,6 +1263,7 @@ def checkout_basket(
 def change_order_state(
     order: Order,
     new_state: OrderState,
+    contact: Contact | None = None,
     notify_request: AnyRequest | None = None,
 ) -> None:
     """Apply an allowed order state transition and update stock.
@@ -1273,6 +1274,7 @@ def change_order_state(
     Args:
         order (Order): The order to update.
         new_state (OrderState): The requested target state.
+        contact (Contact): Optional contact information to set for the order.
         notify_request (AnyRequest | None): Request used for notifications.
             If None then no notifications are performed.
 
@@ -1280,6 +1282,9 @@ def change_order_state(
         InvalidOrderStateTransitionError: If the transition is not allowed.
     """
     old_state: OrderState = order.state
+    if old_state == new_state:
+        return
+
     validate_order_state_transition(old_state, new_state)
     order, items, offers = _lock_order_items(order)
 
@@ -1290,6 +1295,8 @@ def change_order_state(
         _reserve_stock(items, offers)
 
     order.state = new_state
+    if contact is not None:
+        order.contact = contact
     order.save()
 
     if notify_request is not None:

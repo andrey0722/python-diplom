@@ -431,10 +431,14 @@ class OrderState(models.TextChoices):
 
 
 IS_BASKET: Final = Q(state=OrderState.BASKET)
+IS_INACTIVE: Final = Q(state__in=OrderState.inactive())
 
 
 class Order(models.Model):
     """Order placed by a user with items from different shops."""
+
+    objects = models.Manager()
+    inactive = QueryManager(IS_INACTIVE)
 
     user = models.ForeignKey(
         User,
@@ -470,10 +474,7 @@ class Order(models.Model):
                 name='uq_order_single_basket',
             ),
             models.CheckConstraint(
-                condition=(
-                    Q(state__in=OrderState.inactive())
-                    | Q(contact__isnull=False)
-                ),
+                condition=(IS_INACTIVE | Q(contact__isnull=False)),
                 name='ck_order_contact_not_null',
             ),
         )

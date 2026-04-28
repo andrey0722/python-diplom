@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import CreateAPIView
+from rest_framework.generics import DestroyAPIView
 from rest_framework.generics import GenericAPIView
 from rest_framework.generics import ListAPIView
 from rest_framework.generics import ListCreateAPIView
@@ -29,9 +30,11 @@ from .filters import ShopOfferFilter
 from .mixins import FilterByIdsListMixin
 from .mixins import GetObjectByAuthUserMixin
 from .mixins import GetQuerySetByAuthUserMixin
+from .mixins import ListRetrieveModelMixin
 from .models import Basket
 from .models import Category
 from .models import Contact
+from .models import Order
 from .models import OrderItem
 from .models import OrderState
 from .models import PlacedOrder
@@ -56,6 +59,7 @@ from .serializers import UserLoginSerializer
 from .serializers import UserSerializer
 from .serializers import VerificationSentSerializer
 from .services import add_to_basket
+from .services import change_order_state
 from .services import check_email_verify_token
 from .services import check_password_reset_token
 from .services import checkout_basket
@@ -499,7 +503,11 @@ class BasketView(
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView, RetrieveAPIView):
+class UserOrderView(
+    GetQuerySetByAuthUserMixin,
+    ListRetrieveModelMixin,
+    DestroyAPIView,
+):
     """View for managing user orders and placing new orders."""
 
     queryset = PlacedOrder.objects
@@ -507,7 +515,7 @@ class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView, RetrieveAPIView):
     permission_classes = (IsAuthenticated,)
 
     def post(self, request: Request) -> Response:
-        """Create an order from the authenticated user's basket.
+        """Create an order from user's basket or reopen inactive order.
 
         Args:
             request (Request): The incoming request.
@@ -516,5 +524,19 @@ class UserOrderView(GetQuerySetByAuthUserMixin, ListAPIView, RetrieveAPIView):
             Response: Confirmation that the order was placed.
         """
         data = validate_request(PlaceOrderSerializer, request)
-        checkout_basket(data['id'], data['contact'], request)
+        order: Order = data['id']
+        contact: Contact = data['contact']
+        if order.state == OrderState.BASKET:
+            checkout_basket(order, contact, request)
+        else:
+            change_order_state(order, OrderState.NEW, contact, request)
         return Response(_('Order placed.'))
+
+    @override
+    def perform_destroy(self, instance: PlacedOrder) -> None:
+        """Cancel the order through the state transition service.
+
+        Args:
+            instance (PlacedOrder): The order being deleted by the API.
+        """
+        change_order_state(instance, OrderState.CANCELLED, None, self.request)

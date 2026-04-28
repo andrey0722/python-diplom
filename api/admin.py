@@ -699,7 +699,7 @@ class OrderAdmin(DisableModelAddMixin, BaseOrderAdmin):
         with transaction.atomic():
             super().save_model(request, obj, form, change)
             try:
-                change_order_state(obj, new_state, request)
+                change_order_state(obj, new_state, None, request)
             except Exception as e:
                 error_message(request, e)
                 transaction.rollback()
