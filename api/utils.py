@@ -7,11 +7,18 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.views import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
-from .exceptions import ApplicationError
 from .exceptions import BasketCheckoutError
+from .exceptions import InvalidParameterError
 from .exceptions import NotBasketCheckoutError
+from .exceptions import NotFoundError
+from .exceptions import ParsingError
+from .exceptions import WebRequestError
 
-EXCEPTION_STATUS_MAPPING: Final[dict[type[ApplicationError], int]] = {
+EXCEPTION_STATUS_MAPPING: Final[dict[type[Exception], int]] = {
+    InvalidParameterError: status.HTTP_400_BAD_REQUEST,
+    NotFoundError: status.HTTP_404_NOT_FOUND,
+    WebRequestError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    ParsingError: status.HTTP_422_UNPROCESSABLE_ENTITY,
     BasketCheckoutError: status.HTTP_409_CONFLICT,
     NotBasketCheckoutError: status.HTTP_400_BAD_REQUEST,
 }

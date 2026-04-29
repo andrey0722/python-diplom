@@ -14,7 +14,6 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import send_mail
-from django.db import DatabaseError
 from django.db import transaction
 from django.db.models import Model
 from django.http import HttpRequest
@@ -28,14 +27,18 @@ from rest_framework.views import APIView
 import yaml
 
 from .exceptions import BasketCheckoutError
-from .exceptions import BasketModifyError
 from .exceptions import ErrorDict
 from .exceptions import ErrorList
 from .exceptions import InvalidOrderStateTransitionError
 from .exceptions import LazyErrorMessage
 from .exceptions import MissingIdsError
 from .exceptions import NotBasketCheckoutError
-from .exceptions import ShopUpdateError
+from .exceptions import WebRequestConnectError
+from .exceptions import WebRequestError
+from .exceptions import WebRequestResponseStatusError
+from .exceptions import WebRequestTimeoutError
+from .exceptions import WebRequestTooManyRedirectsError
+from .exceptions import YAMLParsingError
 from .models import Category
 from .models import Contact
 from .models import Order
@@ -878,15 +881,68 @@ def debug_process_file_url[**P](
             return httpx.Response(404, text='File not found')
         except OSError as exc:
             return httpx.Response(500, text=str(exc))
+        request = httpx.Request('GET', url, stream=httpx.SyncByteStream())
         return httpx.Response(
             200,
             content=content,
             headers={'content-length': str(len(content))},
+            request=request,
         )
 
     return wrapper
 
 
+def convert_web_request_errors[**P](
+    func: Callable[P, httpx.Response],
+) -> Callable[P, httpx.Response]:
+    """Convert HTTPX request failures to application errors.
+
+    Args:
+        func (Callable[P, httpx.Response]): Function returning a response.
+
+    Returns:
+        Callable[P, httpx.Response]: Wrapped function with normalized errors.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> httpx.Response:
+        """Run the wrapped request and raise application errors on failure.
+
+        Args:
+            *args (Any): Positional arguments for the wrapped function.
+            **kwargs (Any): Keyword arguments for the wrapped function.
+
+        Returns:
+            httpx.Response: Successful response from the wrapped function.
+
+        Raises:
+            WebRequestError: If the request fails for a supported reason.
+        """
+        try:
+            response = func(*args, **kwargs)
+            response.raise_for_status()
+        except httpx.RequestError as e:
+            logger.error(
+                'Failed to download document from %s',
+                e.request and e.request.url.netloc,
+                exc_info=e,
+            )
+            if isinstance(e, httpx.TimeoutException):
+                raise WebRequestTimeoutError from e
+            if isinstance(e, httpx.ConnectError):
+                raise WebRequestConnectError from e
+            if isinstance(e, httpx.TooManyRedirects):
+                raise WebRequestTooManyRedirectsError from e
+            if isinstance(e, httpx.HTTPStatusError):
+                status_code = e.response.status_code
+                raise WebRequestResponseStatusError(status_code) from e
+            raise WebRequestError from e
+        return response
+
+    return wrapper
+
+
+@convert_web_request_errors
 @debug_process_file_url
 def retry_get_url(url: str, retries: int = 10) -> httpx.Response:
     """Retry an HTTP GET request no more than `retries` times.
@@ -898,7 +954,7 @@ def retry_get_url(url: str, retries: int = 10) -> httpx.Response:
     Returns:
         httpx.Response: The successful HTTP response.
     """
-    with httpx.Client() as session:
+    with httpx.Client(follow_redirects=True) as session:
         fail_count = 0
         while True:
             try:
@@ -919,10 +975,15 @@ def update_shop_pricing_yaml(user: User, url: str, content: str):
         url (str): The pricing document URL.
         content (str): The YAML document.
     """
-    data = yaml.safe_load(content)
+    try:
+        data = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        logger.error('Invalid YAML document', exc_info=e)
+        raise YAMLParsingError(e) from e
     update_shop_pricing(user, url, data)
 
 
+@transaction.atomic
 def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
     """Apply shop pricing from processed input data.
 
@@ -932,29 +993,16 @@ def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
         data (dict[str, Any]): Parsed pricing data.
     """
     data = validate_data(ShopPricingSerializer, data)
+    name = data['shop']
+
     try:
-        _update_shop_pricing_impl(user, url, data)
-    except DatabaseError as e:
-        logger.exception('Shop update error: %s', url)
-        raise ShopUpdateError from e
-
-
-@transaction.atomic
-def _update_shop_pricing_impl(
-    user: User,
-    url: str,
-    data: dict[str, Any],
-) -> None:
-    """Apply shop pricing from validated data.
-
-    Args:
-        user (User): The shop owner.
-        url (str): Pricing document URL.
-        data (dict[str, Any]): Validated shop pricing payload.
-    """
-    shop = get_or_create_model(Shop, data, name=data['shop'], user=user)
-    shop.url = url
-    shop.save()
+        shop = get_model(Shop, user=user)
+    except Shop.DoesNotExist:
+        shop = create_model(Shop, user=user, name=name, url=url)
+    else:
+        shop.name = name
+        shop.url = url
+        shop.save()
 
     # Use category IDs from document for in-document mapping only
     categories = {
@@ -963,7 +1011,7 @@ def _update_shop_pricing_impl(
     }
 
     # Clear all shop offers but reuse product records
-    shop.offers.all().delete()
+    ShopOffer.objects.filter(shop_id=shop.pk).delete()
 
     for item in data['goods']:
         item['category'] = categories[item['category']]
@@ -980,40 +1028,20 @@ def _update_shop_pricing_impl(
             )
 
 
+@transaction.atomic
 def add_to_basket(user: User, request: Request) -> None:
     """Add items to the user's shopping basket from request data.
-
-    Validates the request data and adds shop offers to the user's basket
-    (creates or retrieves basket order). If an item is already in the basket,
-    its quantity is increased.
-
-    Args:
-        user (User): The user adding items to their basket.
-        request (Request): The request object containing basket items.
-
-    Raises:
-        BasketModifyError: If there's a database error during the operation.
-    """
-    data = validate_request(AddToBasketSerializer, request)
-    try:
-        _add_to_basket_impl(user, data)
-    except DatabaseError as e:
-        logger.exception('Add to basket error')
-        raise BasketModifyError from e
-
-
-@transaction.atomic
-def _add_to_basket_impl(user: User, data: dict[str, Any]) -> None:
-    """Add validated items to the user's basket order.
 
     Creates a new basket order if needed and adds shop offer items to it.
     If an item is already in the basket, increases its quantity instead
     of creating a duplicate.
 
     Args:
-        user (User): The user who owns the basket.
-        data (dict[str, Any]): Validated data containing items to add.
+        user (User): The user adding items to their basket.
+        request (Request): The request object containing basket items.
     """
+    data = validate_request(AddToBasketSerializer, request)
+
     basket = get_or_create_model(Order, user=user, state=OrderState.BASKET)
     offers = locate_model_items(ShopOffer, data['items'], 'shop_offer_id')
 
@@ -1029,11 +1057,12 @@ def _add_to_basket_impl(user: User, data: dict[str, Any]) -> None:
             order_item.save()
 
 
+@transaction.atomic
 def edit_basket(user: User, request: Request) -> None:
     """Update quantities of items in the user's shopping basket.
 
-    Validates the request data and updates order item quantities in the
-    user's basket based on the provided item data.
+    Modifies the quantity of existing order items in the user's basket
+    based on the provided item data.
 
     Args:
         user (User): The user updating their basket.
@@ -1043,24 +1072,7 @@ def edit_basket(user: User, request: Request) -> None:
         BasketModifyError: If there's a database error during the operation.
     """
     data = validate_request(EditBasketSerializer, request)
-    try:
-        _edit_basket_impl(user, data)
-    except DatabaseError as e:
-        logger.exception('Edit basket error')
-        raise BasketModifyError from e
 
-
-@transaction.atomic
-def _edit_basket_impl(user: User, data: dict[str, Any]) -> None:
-    """Update quantities for items in the user's basket order.
-
-    Modifies the quantity of existing order items in the user's basket
-    based on the provided item data.
-
-    Args:
-        user (User): The user whose basket is being updated.
-        data (dict[str, Any]): Validated data with new quantities.
-    """
     basket = get_or_create_model(Order, user=user, state=OrderState.BASKET)
     order_items = locate_model_items(OrderItem, data['items'], order=basket)
 

@@ -4,62 +4,9 @@ from collections.abc import Iterable
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext import StrPromise
-from rest_framework import status
-from rest_framework.exceptions import APIException
-from rest_framework.exceptions import NotFound
+import yaml
 
 from .models import OrderState
-
-
-class MissingIdsError(NotFound):
-    """Failed to find one or more requested item IDs."""
-
-    def __init__(self, missing_ids: Iterable[object], code: object = None):
-        """Initialize the exception with the missing IDs.
-
-        Args:
-            missing_ids (Iterable[object]): IDs that were not found.
-            code (object, optional): Optional error code.
-        """
-        detail = {
-            'detail': {
-                'error': _('One or more ids not found.'),
-                'input': list(missing_ids),
-            }
-        }
-        super().__init__(detail, code)
-
-
-class TokenConfirmError(APIException):
-    """Failed to validate user confirmation token."""
-
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = _('Invalid email or token.')
-    default_code = 'password_reset_error'
-
-
-class ShopUrlLoadError(APIException):
-    """Failed to execute shop pricing URL request."""
-
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
-    default_detail = _('Could to load shop pricing')
-    default_code = 'shop_url_load_error'
-
-
-class ShopUpdateError(APIException):
-    """Unable to apply shop pricing data."""
-
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
-    default_detail = _('Could not process shop pricing data')
-    default_code = 'shop_update_error'
-
-
-class BasketModifyError(APIException):
-    """Unable to modify user's basket contents."""
-
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
-    default_detail = _('Could not modify basket contents')
-    default_code = 'basket_modify_error'
 
 
 class LazyErrorMessage(Promise):
@@ -84,6 +31,18 @@ class LazyErrorMessage(Promise):
         return str(self.message).format_map(self.params)
 
 
+def lazy_str(obj: object) -> LazyErrorMessage:
+    """Wrap an object for lazy string conversion.
+
+    Args:
+        obj (object): The object to stringify lazily.
+
+    Returns:
+        LazyErrorMessage: Lazy message wrapper for the object.
+    """
+    return LazyErrorMessage('{obj!s}', obj=obj)
+
+
 type ErrorMessage = str | StrPromise | LazyErrorMessage
 
 
@@ -99,7 +58,11 @@ class ErrorDict(defaultdict[str, ErrorList]):
         super().__init__(ErrorList, *args, **kwargs)
 
 
-type ErrorDetail = ErrorMessage | ErrorList | ErrorDict | None
+class ErrorPlainDict(dict[str, 'ErrorDetail']):
+    """Convenience class for free-form error data."""
+
+
+type ErrorDetail = ErrorMessage | ErrorList | ErrorDict | ErrorPlainDict | None
 type ErrorCode = str | None
 
 
@@ -119,6 +82,123 @@ class ApplicationError(Exception):
         self.detail = self.default_detail if detail is None else detail
         self.code = self.default_code if code is None else code
         super().__init__(self.detail, self.code)
+
+
+class InvalidParameterError(ApplicationError):
+    """Request contains an invalid parameter."""
+
+    default_detail = _('Invalid parameter has been passed to the request.')
+    default_code = 'invalid_parameter_error'
+
+
+class NotFoundError(ApplicationError):
+    """Requested application resource was not found."""
+
+    default_detail = _('Requested resource not found.')
+    default_code = 'not_found_error'
+
+
+class WebRequestError(ApplicationError):
+    """Failed to execute web request."""
+
+    default_detail = _('Could not execute web request.')
+    default_code = 'web_request_error'
+
+
+class WebRequestTimeoutError(WebRequestError):
+    """Failed to execute web request due to timeout."""
+
+    default_detail = _('The remote server did not respond in time.')
+    default_code = 'web_request_timeout_error'
+
+
+class WebRequestConnectError(WebRequestError):
+    """Failed to connect to a remote server."""
+
+    default_detail = _('Could not connect to the remote server.')
+    default_code = 'web_request_connect_error'
+
+
+class WebRequestTooManyRedirectsError(WebRequestError):
+    """Remote URL redirected too many times."""
+
+    default_detail = _('The URL redirects too many times.')
+    default_code = 'web_request_too_many_redirects_error'
+
+
+class WebRequestResponseStatusError(WebRequestError):
+    """Remote server returned an unsuccessful status code."""
+
+    default_detail = _(
+        'The remote server responded with status code {status_code}.'
+    )
+    default_code = 'web_request_response_status_error'
+
+    def __init__(self, status_code: int, code: ErrorCode = None):
+        """Initialize the error with the remote response status.
+
+        Args:
+            status_code (int): HTTP status code returned by the server.
+            code (ErrorCode): Optional error code override.
+        """
+        detail = LazyErrorMessage(self.default_detail, status_code=status_code)
+        super().__init__(detail, code)
+
+
+class ParsingError(ApplicationError):
+    """Input document could not be parsed."""
+
+    default_detail = _('Could not parse input document.')
+    default_code = 'parsing_error'
+
+
+class YAMLParsingError(ParsingError):
+    """YAML input document could not be parsed."""
+
+    default_detail = _('The input document is not a valid YAML.')
+    default_code = 'yaml_parsing_error'
+
+    def __init__(self, exc: yaml.YAMLError, code: ErrorCode = None):
+        """Initialize the error with safe YAML parser details.
+
+        Args:
+            exc (yaml.YAMLError): YAML parser exception.
+            code (ErrorCode): Optional error code override.
+        """
+        detail = ErrorPlainDict()
+        detail['error'] = self.default_detail
+        if problem := getattr(exc, 'problem', None):
+            detail['reason'] = str(problem)[:200]
+        if mark := getattr(exc, 'problem_mark', None):
+            detail['line'] = mark.line + 1
+            detail['column'] = mark.column + 1
+        super().__init__(detail, code)
+
+
+class TokenConfirmError(InvalidParameterError):
+    """Failed to validate user confirmation token."""
+
+    default_detail = _('Invalid email or token provided.')
+    default_code = 'token_confirm_error'
+
+
+class MissingIdsError(NotFoundError):
+    """Failed to find one or more requested item IDs."""
+
+    default_detail = _('One or more ids not found.')
+    default_code = 'missing_ids_error'
+
+    def __init__(self, missing_ids: Iterable[object], code: ErrorCode = None):
+        """Initialize the exception with the missing IDs.
+
+        Args:
+            missing_ids (Iterable[object]): IDs that were not found.
+            code (ErrorCode): The error code.
+        """
+        detail = ErrorPlainDict()
+        detail['error'] = self.default_detail
+        detail['input'] = ErrorList(map(lazy_str, missing_ids))
+        super().__init__(detail, code)
 
 
 class BasketCheckoutError(ApplicationError):

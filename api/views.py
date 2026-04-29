@@ -8,7 +8,6 @@ from django.db.models import Prefetch
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
-import httpx
 from rest_framework import status
 from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
@@ -26,7 +25,6 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
-from .exceptions import ShopUrlLoadError
 from .exceptions import TokenConfirmError
 from .filters import CategoryFilter
 from .filters import ShopFilter
@@ -392,18 +390,8 @@ class ShopUpdateView(APIView):
 
         Returns:
             str: The raw pricing document content.
-
-        Raises:
-            ShopUrlLoadError: If the URL request fails or
-                non-success status.
         """
-        try:
-            response = retry_get_url(url)
-        except httpx.RequestError as e:
-            logger.exception('Shop URL connect error')
-            raise ShopUrlLoadError from e
-        if not response.is_success:
-            raise ShopUrlLoadError
+        response = retry_get_url(url)
         return response.text
 
 
