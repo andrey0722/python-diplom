@@ -62,6 +62,22 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+
+if DEBUG:
+    # Install Django Debug Toolbar
+    INSTALLED_APPS += ['debug_toolbar']
+
+    MIDDLEWARE = [
+        # The Debug Toolbar middleware must be as early as possible in the list
+        'debug_toolbar.middleware.DebugToolbarMiddleware',
+        *MIDDLEWARE,
+    ]
+
+    INTERNAL_IPS = [
+        '127.0.0.1',
+    ]
+
+
 ROOT_URLCONF = 'project.urls'
 
 TEMPLATES = [
