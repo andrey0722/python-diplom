@@ -30,6 +30,8 @@ SECRET_KEY = env.str('DJANGO_SECRET_KEY', 'django-example-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DJANGO_DEBUG', False)
 
+SQL_TRACE = env.bool('SQL_TRACE', False)
+
 ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', str, [])  # type: ignore[reportArgumentType]
 
 
@@ -61,6 +63,13 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if SQL_TRACE:
+    MIDDLEWARE = [
+        # Install helper middleware which logs SQL query stats
+        'project.middleware.DebugSQLQueryStatsMiddleware',
+        *MIDDLEWARE,
+    ]
 
 
 if DEBUG:
@@ -94,6 +103,123 @@ TEMPLATES = [
         },
     },
 ]
+
+
+APP_LOG_LEVEL = 'DEBUG' if DEBUG else 'INFO'
+DJANGO_DB_LOG_LEVEL = 'DEBUG' if SQL_TRACE else 'WARNING'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'rich': {
+            'format': '%(message)s',
+            'datefmt': '[%X]',
+        },
+        'pretty_sql': {
+            '()': 'project.logging.PrettySQLFormatter',
+            'format': '%(message)s',
+            'datefmt': '[%X]',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'rich.logging.RichHandler',
+            'level': 'INFO',
+            'formatter': 'rich',
+            'rich_tracebacks': True,
+            'tracebacks_show_locals': False,
+            'show_time': True,
+            'show_level': True,
+            'show_path': True,
+            'markup': True,
+        },
+        'console_debug': {
+            'class': 'rich.logging.RichHandler',
+            'level': 'DEBUG',
+            'formatter': 'rich',
+            'rich_tracebacks': True,
+            'tracebacks_show_locals': False,
+            'show_time': True,
+            'show_level': True,
+            'show_path': True,
+            'markup': True,
+        },
+        'console_debug_sql': {
+            'class': 'rich.logging.RichHandler',
+            'level': 'DEBUG',
+            'formatter': 'pretty_sql',
+            'rich_tracebacks': True,
+            'tracebacks_show_locals': False,
+            'show_time': True,
+            'show_level': True,
+            'show_path': True,
+            'markup': False,
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        # Project logging
+        'api': {
+            'handlers': ['console_debug'],
+            'level': APP_LOG_LEVEL,
+            'propagate': False,
+        },
+        'project': {
+            'handlers': ['console_debug'],
+            'level': APP_LOG_LEVEL,
+            'propagate': False,
+        },
+        # Django basic logging
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Django request handling errors
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        # Django runserver logs
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Django SQL queries debug logs
+        'django.db.backends': {
+            'handlers': ['console_debug_sql'],
+            'level': DJANGO_DB_LOG_LEVEL,
+            'propagate': False,
+        },
+        # Some libraries
+        'asyncio': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'urllib3': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'httpx': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'httpcore': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}
 
 
 EMAIL_BACKEND = env.str(
