@@ -25,7 +25,7 @@ class PasswordField(serializers.CharField):
         """Initialize password field with secure input styling.
 
         Args:
-            kwargs: Additional arguments passed to CharField.
+            **kwargs (Any): Additional arguments passed to CharField.
         """
         super().__init__(style={'input_type': 'password'}, **kwargs)
 
@@ -37,7 +37,7 @@ class PositiveIntField(serializers.IntegerField):
         """Initialize the positive integer field with minimum value of 1.
 
         Args:
-            **kwargs: Additional arguments passed to IntegerField.
+            **kwargs (Any): Additional arguments passed to IntegerField.
         """
         super().__init__(min_value=1, **kwargs)
 
@@ -96,7 +96,7 @@ class UserSerializer(serializers.ModelSerializer):
         instance: User = super().create(validated_data)
         instance.set_password(password)
         instance.is_active = False  # Need to validate email first
-        instance.save()
+        instance.save(update_fields=['password', 'is_active'])
         return instance
 
     @override
@@ -114,7 +114,7 @@ class UserSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
         if password is not None:
             instance.set_password(password)
-            instance.save()
+            instance.save(update_fields=['password'])
         return instance
 
 
@@ -387,7 +387,7 @@ if settings.DEBUG:
             """Validate a local file URL.
 
             Args:
-                parts: URL components from urlsplit.
+                parts (object): URL components from urlsplit.
 
             Raises:
                 ValidationError: If the file URL is invalid.
@@ -410,7 +410,7 @@ class URLField(serializers.CharField):
         """Initialize URLField with URL validator.
 
         Args:
-            kwargs: Additional arguments passed to CharField.
+            **kwargs (Any): Additional arguments passed to CharField.
         """
         super().__init__(**kwargs)
         validator = URLValidator(message=self.error_messages['invalid'])
@@ -534,6 +534,7 @@ class AddToBasketItemSerializer(serializers.ModelSerializer):
     """Serializer for individual items being added to the basket."""
 
     product_info = serializers.IntegerField(source='shop_offer_id')
+    quantity = PositiveIntField()
 
     class Meta:
         model = OrderItem
@@ -550,6 +551,7 @@ class EditBasketItemSerializer(serializers.ModelSerializer):
     """Serializer for basket items being edited with new quantities."""
 
     id = serializers.IntegerField()
+    quantity = PositiveIntField()
 
     class Meta:
         model = OrderItem

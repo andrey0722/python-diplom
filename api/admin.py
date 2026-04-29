@@ -1,22 +1,31 @@
-from typing import Any, override
+from typing import Any, NoReturn, override
 
 from admin_extra_buttons.decorators import button
 from admin_extra_buttons.mixins import ExtraButtonsMixin
 from django.contrib import admin
 from django.contrib import messages
+from django.contrib.admin.options import BaseModelAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import Case
+from django.db.models import Count
 from django.db.models import F
 from django.db.models import IntegerField
 from django.db.models import Model
+from django.db.models import Prefetch
+from django.db.models import QuerySet
 from django.db.models import Sum
+from django.db.models import Value
+from django.db.models import When
+from django.db.models.fields.related import RelatedField
+from django.db.models.functions import Cast
 from django.db.models.functions import Coalesce
+from django.db.models.functions import Floor
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.html import format_html
@@ -45,8 +54,8 @@ from .models import Token
 from .models import User
 from .services import change_order_state
 from .services import checkout_basket
+from .services import get_order_items_context
 from .services import get_order_state
-from .services import is_order_active
 
 
 def get_admin_view(
@@ -125,6 +134,106 @@ def error_message(request: HttpRequest, exc: Exception) -> None:
         messages.error(request, str(exc))
 
 
+class OptimizeFieldsQueriesMixin(BaseModelAdmin):
+    """Admin mixin that optimizes related field querysets."""
+
+    @override
+    def get_field_queryset(
+        self,
+        db: str | None,
+        db_field: RelatedField,
+        request: HttpRequest,
+    ) -> QuerySet | None:
+        """Return an optimized queryset for selected related fields.
+
+        Args:
+            db (str | None): Database alias for the field queryset.
+            db_field (RelatedField): Related field being rendered.
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet | None: Optimized field queryset when available.
+        """
+        queryset = super().get_field_queryset(db, db_field, request)
+        if queryset is None:
+            queryset = self._get_initial_queryset(db_field.name)
+        if queryset is not None:
+            queryset = self._prefetch_queryset(db_field.name, queryset)
+        return queryset
+
+    @staticmethod
+    def _get_initial_queryset(field_name: str) -> QuerySet | None:
+        """Return the base queryset for an optimized field.
+
+        Args:
+            field_name (str): Related field name.
+
+        Returns:
+            QuerySet | None: Base queryset for known fields.
+        """
+        match field_name:
+            case 'order':
+                manager = Order.objects
+            case 'product':
+                manager = Product.objects
+            case 'shop_offer':
+                manager = ShopOffer.objects
+            case _:
+                return None
+        return manager.get_queryset()
+
+    @staticmethod
+    def _prefetch_queryset(field_name: str, queryset: QuerySet) -> QuerySet:
+        """Apply field-specific queryset optimizations.
+
+        Args:
+            field_name (str): Related field name.
+            queryset (QuerySet): Base queryset to optimize.
+
+        Returns:
+            QuerySet: Optimized queryset for the field.
+        """
+        match field_name:
+            case 'order':
+                return queryset.only(
+                    'id', 'state', 'user__email'
+                ).select_related('user', 'contact')
+            case 'product':
+                return queryset.only('id', 'name')
+            case 'shop_offer':
+                return queryset.only(
+                    'id', 'price', 'shop__name', 'product__name'
+                ).select_related('shop', 'product')
+        return queryset
+
+
+class ReadonlyFieldsChangeViewMixin(BaseModelAdmin):
+    """Admin mixin that adds read-only fields on change views."""
+
+    readonly_fields_change_view = ()
+
+    @override
+    def get_readonly_fields(
+        self,
+        request: HttpRequest,
+        obj: Model | None = None,
+    ) -> list[str] | tuple[str]:
+        """Return read-only fields for add or change views.
+
+        Args:
+            request (HttpRequest): The current admin request.
+            obj (Model | None): Object being edited, if any.
+
+        Returns:
+            list[str] | tuple[str]: Read-only field names.
+        """
+        fields = list(super().get_readonly_fields(request, obj))
+        if obj is not None:
+            # Model change view
+            fields += self.readonly_fields_change_view
+        return fields
+
+
 class DisableModelAddMixin(admin.ModelAdmin):
     """Admin mixin that blocks model add views."""
 
@@ -146,7 +255,7 @@ class DisableModelAddMixin(admin.ModelAdmin):
         request: HttpRequest,
         form_url: str = '',
         extra_context: dict[str, Any] | None = None,
-    ) -> HttpResponse:
+    ) -> NoReturn:
         """Reject direct access to the add view.
 
         Args:
@@ -165,6 +274,19 @@ class ContactsInline(admin.StackedInline):
 
     model = Contact
     extra = 0
+    show_change_link = True
+
+    @override
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
+        """Return contacts with users selected for inline display.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: Contact queryset with related user loaded.
+        """
+        return super().get_queryset(request).select_related('user')
 
 
 @admin.register(User)
@@ -182,6 +304,7 @@ class UserAdmin(BaseUserAdmin):
     )
     list_display_links = ('id', 'email')
     list_editable = ('is_active',)
+    search_fields = ('email', 'first_name', 'last_name')
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (
@@ -209,24 +332,39 @@ class UserAdmin(BaseUserAdmin):
         ),
         (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
     )
-    ordering = ('email',)
+    add_fieldsets = (
+        (
+            None,
+            {
+                'classes': ('wide',),
+                'fields': (
+                    'email',
+                    'usable_password',
+                    'password1',
+                    'password2',
+                ),
+            },
+        ),
+    )
+    ordering = ('pk',)
     inlines = (ContactsInline,)
     save_on_top = True
 
 
 @admin.register(Token)
-class TokenAdmin(admin.ModelAdmin):
+class TokenAdmin(ReadonlyFieldsChangeViewMixin, admin.ModelAdmin):
     """Admin configuration for Token model."""
 
     list_display = ('key', 'user', 'created')
     list_filter = ('created',)
-    search_fields = (f'user__{User.USERNAME_FIELD}',)
+    search_fields = ('user__email',)
     search_help_text = _('User')
-    ordering = (f'user__{User.USERNAME_FIELD}',)
+    readonly_fields_change_view = ('user',)
+    autocomplete_fields = ('user',)
 
 
 @admin.register(Contact)
-class ContactAdmin(admin.ModelAdmin):
+class ContactAdmin(ReadonlyFieldsChangeViewMixin, admin.ModelAdmin):
     """Admin configuration for Contact model."""
 
     list_display = (
@@ -237,8 +375,9 @@ class ContactAdmin(admin.ModelAdmin):
         'phone',
     )
     list_filter = ('city', 'user')
+    list_select_related = ('user',)
     search_fields = (
-        f'user__{User.USERNAME_FIELD}',
+        'user__email',
         'email',
         'phone',
         'first_name',
@@ -251,6 +390,8 @@ class ContactAdmin(admin.ModelAdmin):
         'building',
         'apartment',
     )
+    autocomplete_fields = ('user',)
+    readonly_fields_change_view = ('user',)
     fieldsets = (
         (None, {'fields': ('user',)}),
         (
@@ -287,6 +428,7 @@ class ProductsInline(admin.TabularInline):
 
     model = Product
     extra = 0
+    show_change_link = True
 
 
 @admin.register(Category)
@@ -294,36 +436,157 @@ class CategoryAdmin(admin.ModelAdmin):
     """Admin configuration for Category model."""
 
     list_display = ('name', 'products_count')
+    search_fields = ('name',)
     inlines = (ProductsInline,)
     save_on_top = True
 
+    @override
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
+        """Annotate categories with product counts for admin display.
 
-class OffersInline(admin.StackedInline):
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: Category queryset annotated with product counts.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(products_count_value=Count('products'))
+        )
+
+    @admin.display(
+        description=_('Products count'),
+        ordering='products_count_value',
+    )
+    def products_count(self, obj: Category) -> int:
+        """Return the annotated product count for a category.
+
+        Args:
+            obj (Category): The category displayed in admin.
+
+        Returns:
+            int: Annotated product count value.
+        """
+        return obj.products_count_value
+
+
+class OffersInline(  # pyright: ignore[reportIncompatibleMethodOverride]
+    OptimizeFieldsQueriesMixin,
+    ReadonlyFieldsChangeViewMixin,
+    admin.StackedInline,
+):
     """Inline admin for ShopOffer model."""
 
     model = ShopOffer
+    autocomplete_fields = ('product', 'shop')
+    readonly_fields_change_view = ('shop',)
     extra = 0
+    show_change_link = True
+
+    @override
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
+        """Return shop offers with related shop and product loaded.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: Shop offer queryset with related objects loaded.
+        """
+        return super().get_queryset(request).select_related('shop', 'product')
 
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     """Admin configuration for Product model."""
 
-    list_display = ('name', 'offers_count')
+    list_display = ('name', 'category', 'offers_count')
+    search_fields = ('name',)
+    autocomplete_fields = ('category',)
     inlines = (OffersInline,)
     save_on_top = True
+
+    @override
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
+        """Annotate products with offer counts for admin display.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: Product queryset annotated with offer counts.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .only('name', 'category__name')
+            .select_related('category')
+            .annotate(offers_count_value=Count('offers'))
+        )
+
+    @admin.display(
+        description=_('Offers count'),
+        ordering='offers_count_value',
+    )
+    def offers_count(self, obj: Product) -> int:
+        """Return the annotated offer count for a product.
+
+        Args:
+            obj (Product): The product displayed in admin.
+
+        Returns:
+            int: Annotated offer count value.
+        """
+        return obj.offers_count_value
 
 
 @admin.register(Shop)
-class ShopAdmin(admin.ModelAdmin):
+class ShopAdmin(ReadonlyFieldsChangeViewMixin, admin.ModelAdmin):
     """Admin configuration for Shop model."""
 
-    list_display = ('name', 'user', 'is_active')
+    list_display = ('name', 'user', 'offers_count', 'is_active')
     list_filter = ('is_active',)
     list_editable = ('is_active',)
-    search_fields = ('name', f'user__{User.USERNAME_FIELD}')
+    search_fields = ('name', 'user__email')
+    autocomplete_fields = ('user',)
+    readonly_fields_change_view = ('user',)
     inlines = (OffersInline,)
     save_on_top = True
+
+    @override
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
+        """Return shops with offer counts and users for admin display.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: Shop queryset annotated with offer counts.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .only('name', 'is_active', 'user__email')
+            .select_related('user')
+            .annotate(offers_count_value=Count('offers'))
+        )
+
+    @admin.display(
+        description=_('Offers count'),
+        ordering='offers_count_value',
+    )
+    def offers_count(self, obj: Shop) -> int:
+        """Return the annotated offer count for a shop.
+
+        Args:
+            obj (Shop): The shop displayed in admin.
+
+        Returns:
+            int: Annotated offer count value.
+        """
+        return obj.offers_count_value
 
 
 @admin.register(Parameter)
@@ -338,11 +601,13 @@ class ProductParametersInline(admin.TabularInline):
     """Inline admin for ProductParameter model."""
 
     model = ProductParameter
+    autocomplete_fields = ('parameter',)
     extra = 0
+    show_change_link = True
 
 
 @admin.register(ShopOffer)
-class ShopOfferAdmin(admin.ModelAdmin):
+class ShopOfferAdmin(ReadonlyFieldsChangeViewMixin, admin.ModelAdmin):
     """Admin configuration for ShopOffer model."""
 
     list_display = (
@@ -351,18 +616,68 @@ class ShopOfferAdmin(admin.ModelAdmin):
         'shop',
         'part_number',
         'price',
-        'discount',
+        'admin_discount',
         'quantity',
         'is_active',
     )
+    list_display_links = ('id', 'product')
+    list_select_related = ('shop', 'product')
     list_filter = ('shop__name',)
     search_fields = ('id', 'shop__name', 'product__name', 'part_number')
+    autocomplete_fields = ('product', 'shop')
+    readonly_fields_change_view = ('shop',)
     inlines = (ProductParametersInline,)
     save_on_top = True
 
+    @override
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
+        """Annotate shop offers with discount values for admin display.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: Shop offer queryset annotated with discounts.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(
+                discount_value=Case(
+                    When(
+                        msrp__gt=0,
+                        then=Cast(
+                            Floor(
+                                (F('msrp') - F('price')) * 100.0 / F('msrp')
+                            ),
+                            output_field=IntegerField(),
+                        ),
+                    ),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                ),
+            )
+        )
+
+    @admin.display(description=_('Discount, %'), ordering='discount_value')
+    def admin_discount(self, obj: ShopOffer) -> int:
+        """Return the annotated discount value for a shop offer.
+
+        Args:
+            obj (ShopOffer): The shop offer displayed in admin.
+
+        Returns:
+            int: Annotated discount value.
+        """
+        return obj.discount_value
+
 
 @admin.register(OrderItem)
-class OrderItemAdmin(DisableModelAddMixin, admin.ModelAdmin):
+class OrderItemAdmin(
+    OptimizeFieldsQueriesMixin,
+    DisableModelAddMixin,
+    admin.ModelAdmin,
+):
     """Admin configuration for OrderItem model."""
 
     list_display = (
@@ -375,8 +690,14 @@ class OrderItemAdmin(DisableModelAddMixin, admin.ModelAdmin):
         'sum',
         'shop_name',
     )
+    list_display_links = ('id', 'order')
+    list_select_related = (
+        'order__user',
+        'shop_offer__product',
+        'shop_offer__shop',
+    )
     list_filter = ('order__state', 'shop_offer__shop__name')
-    search_fields = ('id', 'order__id', f'order__user__{User.USERNAME_FIELD}')
+    search_fields = ('id', 'order__id', 'order__user__email')
     fields = ('order_admin_link', 'shop_offer', 'quantity')
     readonly_fields = ('order_admin_link',)
     save_on_top = True
@@ -445,15 +766,46 @@ class OrderItemAdmin(DisableModelAddMixin, admin.ModelAdmin):
         Returns:
             bool: True when the related order is not active.
         """
-        return not is_order_active(item and item.order_id)
+        return item is None or item.order.state in OrderState.inactive()
 
 
-class OrderItemsInline(admin.StackedInline):
+class OrderItemsInline(OptimizeFieldsQueriesMixin, admin.StackedInline):
     """Inline admin for OrderItem model."""
 
     model = OrderItem
     formset = OrderItemInlineFormSet
+    autocomplete_fields = ('shop_offer',)
     extra = 0
+    show_change_link = True
+
+    @override
+    def get_queryset(self, request: HttpRequest) -> QuerySet:
+        """Return order items with related order and offer data loaded.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: Order item queryset with related objects loaded.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .only(
+                'id',
+                'quantity',
+                'order__state',
+                'order__user__email',
+                'shop_offer__price',
+                'shop_offer__shop__name',
+                'shop_offer__product__name',
+            )
+            .select_related(
+                'order__user',
+                'shop_offer__shop',
+                'shop_offer__product',
+            )
+        )
 
     @override
     def has_add_permission(
@@ -522,7 +874,7 @@ class OrderItemsInline(admin.StackedInline):
         Returns:
             bool: True when the order is not active.
         """
-        return not is_order_active(order and order.pk)
+        return order is None or order.state in OrderState.inactive()
 
 
 class BaseOrderAdmin(admin.ModelAdmin):
@@ -532,14 +884,15 @@ class BaseOrderAdmin(admin.ModelAdmin):
         'id',
         'user',
         'state',
-        'contact',
+        'items_count',
         'admin_total_sum',
+        'contact',
         'created_at',
         'updated_at',
     )
     list_display_links = ('id', 'user')
     list_filter = ('state',)
-    search_fields = ('id', f'user__{User.USERNAME_FIELD}')
+    search_fields = ('id', 'user__email')
     inlines = (OrderItemsInline,)
     save_on_top = True
 
@@ -553,53 +906,73 @@ class BaseOrderAdmin(admin.ModelAdmin):
         Returns:
             QuerySet[Order]: Annotated queryset of orders.
         """
-        qs = super().get_queryset(request)
-
-        return qs.annotate(
-            total_sum_value=Coalesce(
-                Sum(F('items__shop_offer__price') * F('items__quantity')),
-                0,
-                output_field=IntegerField(),
-            ),
+        return (
+            super()
+            .get_queryset(request)
+            .only(
+                'id',
+                'state',
+                'created_at',
+                'updated_at',
+                'user__email',
+                'contact',
+            )
+            .select_related('user', 'contact', 'contact__user')
+            .annotate(
+                items_count=Count('items'),
+                total_sum_value=Coalesce(
+                    Sum(F('items__shop_offer__price') * F('items__quantity')),
+                    0,
+                    output_field=IntegerField(),
+                ),
+            )
         )
+
+    @admin.display(
+        description=_('Items'),
+        ordering='items_count',
+    )
+    def items_count(self, instance: Order) -> int:
+        """Return the annotated item count for the order.
+
+        Args:
+            instance (Order): The order displayed in admin.
+
+        Returns:
+            int: Annotated item count.
+        """
+        return instance.items_count
 
     @admin.display(
         description=_('Total sum'),
         ordering='total_sum_value',
     )
     def admin_total_sum(self, instance: Order) -> int:
-        """Return the annotated total sum for the order."""
+        """Return the annotated total sum for the order.
+
+        Args:
+            instance (Order): The order displayed in admin.
+
+        Returns:
+            int: Annotated total sum.
+        """
         return instance.total_sum_value
 
 
 @admin.register(Basket)
-class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
+class BasketAdmin(
+    ExtraButtonsMixin,
+    ReadonlyFieldsChangeViewMixin,
+    BaseOrderAdmin,
+):
     """Admin configuration for Basket model."""
 
     form = BasketAdminForm
-    readonly_fields_on_change = ('user',)
+    autocomplete_fields = ('user',)
+    readonly_fields_change_view = ('user',)
 
-    @override
-    def get_readonly_fields(
-        self,
-        request: HttpRequest,
-        obj: Model | None = None,
-    ) -> list[str] | tuple[str]:
-        """Make basket owner read-only when editing an existing basket.
-
-        Args:
-            request (HttpRequest): The current admin request.
-            obj (Model | None): The basket being edited, if any.
-
-        Returns:
-            list[str] | tuple[str]: Read-only field names for the
-                current admin view.
-        """
-        result = list(super().get_readonly_fields(request, obj))
-        if obj is not None:
-            # Model change view
-            result += self.readonly_fields_on_change
-        return result
+    basket_template = 'api/checkout_basket.html'
+    close_template = 'api/close_popup.html'
 
     @button(
         label=_('Checkout basket'),
@@ -624,13 +997,26 @@ class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
         Returns:
             HttpResponse: Response for the checkout popup or form.
         """
-        basket = get_object_or_404(Basket, pk=object_id)
+        items = Prefetch(
+            'items',
+            OrderItem.objects.only(
+                'pk',
+                'order_id',
+                'quantity',
+                'shop_offer__part_number',
+                'shop_offer__model',
+                'shop_offer__price',
+                'shop_offer__product__name',
+            ).select_related('shop_offer__product'),
+        )
+        basket = Basket.objects.prefetch_related(items).get(pk=object_id)
         user = basket.user
 
         if request.method == 'POST':
             form = UserContactSelectForm(request.POST, user=user)
             if form.is_valid():
                 contact: Contact = form.cleaned_data['contact']
+                context = None
                 try:
                     order = checkout_basket(basket, contact, request)
                 except Exception as e:
@@ -644,12 +1030,8 @@ class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
                             order.pk,
                         ),
                     }
-                    return TemplateResponse(
-                        request,
-                        'api/close_popup.html',
-                        context,
-                    )
-                return TemplateResponse(request, 'api/close_popup.html')
+                close_template = getattr(self, 'close_template', '')
+                return TemplateResponse(request, close_template, context)
         else:
             form = UserContactSelectForm(user=user)
 
@@ -657,9 +1039,11 @@ class BasketAdmin(ExtraButtonsMixin, BaseOrderAdmin):
             **self.admin_site.each_context(request),
             'is_popup': True,
             'form': form,
-            'basket': basket,
         }
-        return TemplateResponse(request, 'api/checkout_basket.html', context)
+        items = list(basket.items.all())
+        context = get_order_items_context(items, context)
+        basket_template = getattr(self, 'basket_template', '')
+        return TemplateResponse(request, basket_template, context)
 
 
 @admin.register(PlacedOrder)

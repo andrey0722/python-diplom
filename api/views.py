@@ -45,8 +45,10 @@ from .models import ShopOffer
 from .models import Token
 from .models import User
 from .permissions import UserOwnsShop
+from .serializers import AddToBasketSerializer
 from .serializers import CategorySerializer
 from .serializers import ContactSerializer
+from .serializers import EditBasketSerializer
 from .serializers import EmailConfirmSerializer
 from .serializers import FilteredOrderSerializer
 from .serializers import IdSerializer
@@ -95,11 +97,11 @@ class SendVerificationView(GenericAPIView):
 
         Args:
             request (Request): The HTTP request object.
-            args (Any): Additional positional arguments.
-            kwargs (Any): Additional keyword arguments containing user data.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments containing user data.
 
         Returns:
-            The verification token string if generated, None otherwise.
+            str | None: Verification token if generated.
         """
         raise NotImplementedError
 
@@ -195,7 +197,11 @@ class UserRegisterView(CreateAPIView):
 
     @override
     def perform_create(self, serializer: BaseSerializer):
-        """Create a new user and send verification email."""
+        """Create a new user and send verification email.
+
+        Args:
+            serializer (BaseSerializer): Serializer with validated user data.
+        """
         user = serializer.save()
         send_email_verification_mail(self.request, user)
 
@@ -216,10 +222,17 @@ class EmailConfirmView(TokenConfirmView):
 
     @override
     def token_confirmed(self, data: dict[str, Any]) -> Response:
-        """Activate the user account on valid token."""
+        """Activate the user account on valid token.
+
+        Args:
+            data (dict[str, Any]): Validated token data.
+
+        Returns:
+            Response: Email verification success response.
+        """
         user = cast(User, data['user'])
         user.is_active = True
-        user.save()
+        user.save(update_fields=['is_active'])
         return Response(_('Email successfully verified.'))
 
 
@@ -239,10 +252,17 @@ class PasswordResetConfirmView(TokenConfirmView):
 
     @override
     def token_confirmed(self, data: dict[str, Any]) -> Response:
-        """Update user password on valid token."""
+        """Update user password on valid token.
+
+        Args:
+            data (dict[str, Any]): Validated token data.
+
+        Returns:
+            Response: Password reset success response.
+        """
         user = cast(User, data['user'])
         user.set_password(data['password'])
-        user.save()
+        user.save(update_fields=['password'])
         return Response(_('Password successfully reset.'))
 
 
@@ -297,7 +317,7 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
         """Update user personal information.
 
         Args:
-            request: The request object.
+            request (Request): The request object.
 
         Returns:
             Response: Updated user information.
@@ -340,7 +360,7 @@ class UserContactsView(
         """Delete selected contacts by ID list from request.
 
         Args:
-            request: The request object.
+            request (Request): The request object.
 
         Returns:
             Response: HTTP response to the client.
@@ -410,9 +430,9 @@ class ShopStateView(
         """Update the shop active state.
 
         Args:
-            request: The request object.
-            args: Additional positional arguments.
-            kwargs: Additional keyword arguments.
+            request (object): The request object.
+            *args (object): Additional positional arguments.
+            **kwargs (object): Additional keyword arguments.
 
         Returns:
             Response: Updated shop state.
@@ -472,7 +492,9 @@ class CategoryListView(ListAPIView):
 class ShopOfferListView(ListAPIView):
     """List view for shop offers with optional shop and category filtering."""
 
-    queryset = ShopOffer.objects.filter(shop__is_active=True)
+    queryset = ShopOffer.objects.select_related(
+        'shop', 'product', 'product__category'
+    ).filter(shop__is_active=True)
     serializer_class = ShopOfferSerializer
     filterset_class = ShopOfferFilter
 
@@ -484,7 +506,7 @@ class BasketView(
 ):
     """View for managing the user's shopping basket."""
 
-    queryset = Basket.objects
+    queryset = Basket.objects.prefetch_related('items')
     serializer_class = OrderSerializer
     permission_classes = (IsAuthenticated,)
 
@@ -499,7 +521,8 @@ class BasketView(
         Returns:
             Response: The updated basket contents.
         """
-        add_to_basket(request.user, request)
+        data = validate_request(AddToBasketSerializer, request)
+        add_to_basket(request.user, data['items'])
         return self.get(request)
 
     def put(self, request: Request) -> Response:
@@ -511,7 +534,8 @@ class BasketView(
         Returns:
             Response: The updated basket contents.
         """
-        edit_basket(request.user, request)
+        data = validate_request(EditBasketSerializer, request)
+        edit_basket(request.user, data['items'])
         return self.get(request)
 
     def delete(self, request: Request) -> Response:  # noqa: ARG002
@@ -554,10 +578,10 @@ class UserOrderView(
         order: Order = data['id']
         contact: Contact = data['contact']
         if order.state == OrderState.BASKET:
-            checkout_basket(order, contact, request)
+            order = checkout_basket(order, contact, request)
         else:
             change_order_state(order, OrderState.NEW, contact, request)
-        return Response(_('Order placed.'))
+        return self.get(request, order.pk)
 
     @override
     def perform_destroy(self, instance: PlacedOrder) -> None:

@@ -51,12 +51,22 @@ class UserManager(BaseUserManager):
 
     @override
     def create_user(self, *args, **kwargs):
-        """Create user with dummy username."""
+        """Create user with dummy username.
+
+        Args:
+            *args (object): Positional user creation arguments.
+            **kwargs (object): Keyword user creation arguments.
+        """
         return super().create_user(DUMMY_USERNAME, *args, **kwargs)
 
     @override
     def create_superuser(self, *args, **kwargs):
-        """Create superuser with dummy username."""
+        """Create superuser with dummy username.
+
+        Args:
+            *args (object): Positional user creation arguments.
+            **kwargs (object): Keyword user creation arguments.
+        """
         return super().create_superuser(DUMMY_USERNAME, *args, **kwargs)
 
 
@@ -75,6 +85,9 @@ class User(AbstractUser):
     company = models.CharField(_('company'), max_length=50, blank=True)
     position = models.CharField(_('position'), max_length=50, blank=True)
 
+    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
+        ordering = ('pk',)
+
     @property
     def username(self) -> str:
         """Exclude username field from user model.
@@ -90,7 +103,7 @@ class User(AbstractUser):
         """Dummy setter for username field.
 
         Args:
-            _: Value to set (ignored).
+            _ (object): Value to set (ignored).
         """
 
     @property
@@ -112,6 +125,7 @@ class Token(BaseToken):
 
     class Meta(BaseToken.Meta):
         abstract = False
+        ordering = ('-created',)
         constraints = [
             UniqueConstraint(fields=['key', 'user'], name='uq_key_user'),
         ]
@@ -148,6 +162,7 @@ class Contact(models.Model):
     class Meta:
         verbose_name = _('contact')
         verbose_name_plural = _('contacts')
+        ordering = ('pk',)
 
     def __str__(self) -> str:
         """Return the contact address as a formatted string.
@@ -200,11 +215,13 @@ class Category(models.Model):
     name = models.CharField(_('category'), max_length=80)
 
     if TYPE_CHECKING:
+        products_count_value: int
         products: RelatedManager['Product']
 
     class Meta:
         verbose_name = _('category')
         verbose_name_plural = _('categories')
+        ordering = ('pk',)
         constraints = (unique_ignore_case('Category', 'name'),)
 
     def __str__(self) -> str:
@@ -214,16 +231,6 @@ class Category(models.Model):
             str: The category name.
         """
         return self.name
-
-    @property
-    @admin.display(description=_('Products count'))
-    def products_count(self) -> int:
-        """Get the number of products in this category.
-
-        Returns:
-            int: The count of products.
-        """
-        return self.products.count()
 
 
 class Product(models.Model):
@@ -238,11 +245,13 @@ class Product(models.Model):
     )
 
     if TYPE_CHECKING:
+        offers_count_value: int
         offers: RelatedManager['ShopOffer']
 
     class Meta:
         verbose_name = _('product')
         verbose_name_plural = _('products')
+        ordering = ('pk',)
         constraints = (unique_ignore_case('Product', 'name'),)
 
     def __str__(self) -> str:
@@ -252,16 +261,6 @@ class Product(models.Model):
             str: The product name.
         """
         return self.name
-
-    @property
-    @admin.display(description=_('Offers count'))
-    def offers_count(self) -> int:
-        """Get the number of shop offers for this product.
-
-        Returns:
-            int: The count of shop offers.
-        """
-        return self.offers.count()
 
 
 class Shop(models.Model):
@@ -279,11 +278,14 @@ class Shop(models.Model):
 
     if TYPE_CHECKING:
         user_id: object
+        offers_count_value: int
         offers: RelatedManager['ShopOffer']
+        offers_for_order: list['ShopOffer']
 
     class Meta:
         verbose_name = _('shop')
         verbose_name_plural = _('shops')
+        ordering = ('pk',)
         constraints = (unique_ignore_case('Shop', 'name'),)
 
     def __str__(self) -> str:
@@ -303,6 +305,7 @@ class Parameter(models.Model):
     class Meta:
         verbose_name = _('parameter')
         verbose_name_plural = _('parameters')
+        ordering = ('pk',)
         constraints = (unique_ignore_case('Parameter', 'name'),)
 
     def __str__(self) -> str:
@@ -335,9 +338,15 @@ class ShopOffer(models.Model):
     price = models.PositiveIntegerField(_('price'))
     quantity = models.PositiveIntegerField(_('quantity'))
 
+    if TYPE_CHECKING:
+        discount_value: int
+        order_items: RelatedManager['OrderItem']
+        order_items_for_order: list['OrderItem']
+
     class Meta:
         verbose_name = _('shop offer')
         verbose_name_plural = _('shop offers')
+        ordering = ('pk',)
         unique_together = ('shop', 'product', 'model')
 
     def __str__(self) -> str:
@@ -349,12 +358,11 @@ class ShopOffer(models.Model):
         return f'{self.product} │ {self.shop} │ {self.price}'
 
     @property
-    @admin.display(description=_('Discount, %'))
     def discount(self) -> int:
         """Calculate the percentage discount from MSRP to current price.
 
         Returns:
-            int: Discount percentage (0-100).
+            int: Discount percentage value.
         """
         fraction = (self.msrp - self.price) / self.msrp if self.msrp else 0
         return int(fraction * 100)
@@ -394,6 +402,7 @@ class ProductParameter(models.Model):
     class Meta:
         verbose_name = _('product parameter')
         verbose_name_plural = _('product parameters')
+        ordering = ('pk',)
 
     def __str__(self) -> str:
         """Return the product parameter and its value.
@@ -462,12 +471,14 @@ class Order(models.Model):
 
     if TYPE_CHECKING:
         user_id: object
+        items_count: int
         total_sum_value: int
         items: RelatedManager['OrderItem']
 
     class Meta:
         verbose_name = _('order')
         verbose_name_plural = _('orders')
+        ordering = ('pk',)
         constraints = (
             models.UniqueConstraint(
                 fields=('user', 'state'),
@@ -559,6 +570,7 @@ class OrderItem(models.Model):
     class Meta:
         verbose_name = _('order item')
         verbose_name_plural = _('order items')
+        ordering = ('pk',)
         unique_together = ('order', 'shop_offer')
 
     def __str__(self) -> str:
@@ -586,6 +598,24 @@ class OrderItem(models.Model):
     def product_name(self) -> str:
         """Get the name of the product in this order item."""
         return self.shop_offer.product.name
+
+    @property
+    @admin.display(
+        description=_('Part number'),
+        ordering='shop_offer__part_number',
+    )
+    def part_number(self) -> str:
+        """Get the part number of the shop offer in this order item."""
+        return self.shop_offer.part_number
+
+    @property
+    @admin.display(
+        description=_('Product model'),
+        ordering='shop_offer__model',
+    )
+    def model(self) -> str:
+        """Get the product model of the shop offer in this order item."""
+        return self.shop_offer.model
 
     @property
     @admin.display(description=_('Price'), ordering='shop_offer__price')

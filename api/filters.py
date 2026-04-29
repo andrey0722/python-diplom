@@ -56,8 +56,8 @@ class ShopOfferFilter(filters.FilterSet):
 
         Args:
             queryset (QuerySet): The initial queryset of ShopOffer objects.
-            _field_name: The field name (unused, required by FilterSet).
-            value: The search string to match against product name and model.
+            _field_name (str): The field name (unused, required by FilterSet).
+            value (object): Search value for product name and model.
 
         Returns:
             QuerySet: A filtered QuerySet matching the search criteria.

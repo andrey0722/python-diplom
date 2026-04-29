@@ -109,5 +109,6 @@ class ListRetrieveModelMixin(
             Response: List or detail response for the request.
         """
         if pk is not None:
+            self.kwargs['pk'] = pk
             return self.retrieve(request)
         return self.list(request)

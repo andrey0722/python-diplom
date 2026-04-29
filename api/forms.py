@@ -12,7 +12,6 @@ from .models import Order
 from .models import OrderState
 from .models import User
 from .services import get_allowed_state_transitions
-from .services import is_order_active
 from .services import validate_order_state_transition
 
 
@@ -29,7 +28,7 @@ class OrderItemInlineFormSet(forms.BaseInlineFormSet):
         super().clean()
 
         order: Order = self.instance
-        if not is_order_active(order and order.pk):
+        if order.state in OrderState.inactive():
             return
 
         for form in self.forms:
@@ -137,7 +136,9 @@ class OrderAdminForm(forms.ModelForm):
         """
         field = cast(forms.ModelChoiceField, self.fields['contact'])
         field.empty_label = None
-        field.queryset = Contact.objects.filter(user_id=user_id)
+        field.queryset = Contact.objects.filter(
+            user_id=user_id
+        ).select_related('user')
 
     def _filter_state_choices(self, state: OrderState) -> None:
         """Limit state choices to allowed transitions from the current state.
@@ -173,6 +174,6 @@ class UserContactSelectForm(forms.Form):
         """
         super().__init__(*args, **kwargs)
         if user is not None:
-            queryset = Contact.objects.filter(user=user)
+            queryset = Contact.objects.filter(user=user).select_related('user')
             field = cast(forms.ModelChoiceField, self.fields['contact'])
             field.queryset = queryset

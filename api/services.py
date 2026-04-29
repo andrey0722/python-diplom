@@ -1,11 +1,21 @@
+from collections import defaultdict
 from collections.abc import Callable
 from collections.abc import Iterable
+from collections.abc import Mapping
 from dataclasses import dataclass
 import functools
 import json
 import logging
 from pathlib import Path
-from typing import Any, Concatenate, Final, NamedTuple, cast, override
+from typing import (
+    Any,
+    Concatenate,
+    Final,
+    NamedTuple,
+    cast,
+    overload,
+    override,
+)
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
@@ -16,6 +26,8 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Model
+from django.db.models import Prefetch
+from django.db.models import Q
 from django.http import HttpRequest
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -39,6 +51,7 @@ from .exceptions import WebRequestResponseStatusError
 from .exceptions import WebRequestTimeoutError
 from .exceptions import WebRequestTooManyRedirectsError
 from .exceptions import YAMLParsingError
+from .models import Basket
 from .models import Category
 from .models import Contact
 from .models import Order
@@ -50,8 +63,6 @@ from .models import ProductParameter
 from .models import Shop
 from .models import ShopOffer
 from .models import User
-from .serializers import AddToBasketSerializer
-from .serializers import EditBasketSerializer
 from .serializers import EmailConfirmSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import ShopPricingSerializer
@@ -81,7 +92,7 @@ def serialize_dict(cls: type[BaseSerializer], **kwargs: Any) -> dict[str, Any]:
 
     Args:
         cls (type[BaseSerializer]): The serializer class to use.
-        kwargs: Keyword arguments to serialize.
+        **kwargs (Any): Keyword arguments to serialize.
 
     Returns:
         dict[str, Any]: The serialized data.
@@ -102,7 +113,7 @@ def validate_view(
         cls (type[BaseSerializer]): The serializer class to use.
         view (APIView): The view containing the request.
         raise_exception (bool): Whether to raise exception on invalid data.
-        kwargs (object): Fields for the serializer context.
+        **kwargs (object): Fields for the serializer context.
 
     Returns:
         dict[str, Any]: The validated data.
@@ -129,7 +140,7 @@ def validate_request(
         cls (type[BaseSerializer]): The serializer class to use.
         request (Request): The DRF request containing the data.
         raise_exception (bool): Whether to raise on invalid data.
-        kwargs (object): Fields for the serializer context.
+        **kwargs (object): Fields for the serializer context.
 
     Returns:
         dict[str, Any]: The validated serializer data.
@@ -152,7 +163,7 @@ def validate_data(
         cls (type[BaseSerializer]): The serializer class to use.
         data (object): The data to validate.
         raise_exception (bool): Whether to raise exception on invalid data.
-        kwargs (object): Fields for the serializer context.
+        **kwargs (object): Fields for the serializer context.
 
     Returns:
         dict[str, Any]: The validated data.
@@ -187,21 +198,35 @@ def get_model_fields(cls: type[Model]) -> set[str]:
     return {field.name for field in cls._meta.fields}
 
 
-def filter_by_fields(
+def filter_by_fields[T](
     cls: type[Model],
-    data: dict[str, object],
-) -> dict[str, object]:
+    data: dict[str, T],
+) -> dict[str, T]:
     """Filter data keys that are model field names.
 
     Args:
         cls (type[Model]): The Django model class.
-        data (dict[str, object]): Dictionary of data to filter.
+        data (dict[str, T]): Dictionary of data to filter.
 
     Returns:
-        dict[str, object]: Filtered dictionary with valid model field keys.
+        dict[str, T]: Filtered dictionary with valid model field keys.
     """
     fields = get_model_fields(cls)
     return {field: value for field, value in data.items() if field in fields}
+
+
+def model_exists[T: Model](cls: type[T], **kwargs: object) -> bool:
+    """Return whether a model exists for the given lookup fields.
+
+    Args:
+        cls (type[T]): The Django model class.
+        **kwargs (object): Lookup fields for the model query.
+
+    Returns:
+        bool: True when a matching model exists.
+    """
+    kwargs = filter_by_fields(cls, kwargs)
+    return cls.objects.filter(**kwargs).exists()
 
 
 def get_model[T: Model](cls: type[T], **kwargs: object) -> T:
@@ -209,7 +234,7 @@ def get_model[T: Model](cls: type[T], **kwargs: object) -> T:
 
     Args:
         cls (type[T]): The Django model class.
-        kwargs (object): Keyword arguments for model field lookup.
+        **kwargs (object): Keyword arguments for model field lookup.
 
     Returns:
         T: The retrieved model instance.
@@ -221,13 +246,233 @@ def get_model[T: Model](cls: type[T], **kwargs: object) -> T:
     return cls.objects.get(**kwargs)
 
 
-def locate_model_items[T: Model](
+def get_and_lock_model[T: Model](cls: type[T], **kwargs: object) -> T:
+    """Retrieve and lock a model instance for update.
+
+    Args:
+        cls (type[T]): The Django model class.
+        **kwargs (object): Lookup fields for the model query.
+
+    Returns:
+        T: The locked model instance.
+    """
+    kwargs = filter_by_fields(cls, kwargs)
+    return cls.objects.select_for_update().get(**kwargs)
+
+
+def lock_model_instance(instance: Model) -> None:
+    """Lock an existing model instance by primary key.
+
+    Args:
+        instance (Model): The model instance to lock.
+    """
+    cls = instance._meta.model  # noqa: SLF001
+    cls.objects.select_for_update().only('pk').get(pk=instance.pk)
+
+
+type ModelKey[T] = T | tuple[T, ...]
+
+
+@overload
+def model_dict_key[T](item: Mapping[str, T], key_field: str, /) -> T: ...
+
+
+@overload
+def model_dict_key[T](
+    item: Mapping[str, T],
+    key_field1: str,
+    key_field2: str,
+    /,
+    *key_fields: str,
+) -> tuple[T, ...]: ...
+
+
+def model_dict_key[T](
+    item: Mapping[str, T],
+    *key_fields: str,
+) -> ModelKey[T]:
+    """Build a lookup key from dictionary fields.
+
+    Args:
+        item (Mapping[str, T]): Mapping containing key fields.
+        *key_fields (str): Field names to include in the key.
+
+    Returns:
+        ModelKey[T]: Empty tuple, single value, or tuple of values.
+    """
+    if len(key_fields) == 1:
+        return item[key_fields[0]]
+    return tuple(map(item.__getitem__, key_fields))
+
+
+@overload
+def model_object_key(obj: object, key_field: str, /) -> object: ...
+
+
+@overload
+def model_object_key(
+    obj: object,
+    key_field1: str,
+    key_field2: str,
+    /,
+    *key_fields: str,
+) -> tuple[object, ...]: ...
+
+
+def model_object_key(obj: object, *key_fields: str) -> ModelKey[object]:
+    """Build a lookup key from object attributes.
+
+    Args:
+        obj (object): Object containing key attributes.
+        *key_fields (str): Attribute names to include in the key.
+
+    Returns:
+        ModelKey[object]: Empty tuple, single value, or tuple of values.
+    """
+    if len(key_fields) == 1:
+        return getattr(obj, key_fields[0])
+    return tuple(getattr(obj, key_field) for key_field in key_fields)
+
+
+@transaction.atomic
+def get_or_create_models_by_field[T: Model](
+    cls: type[T],
+    data: Iterable[dict[str, Any]],
+    *key_fields: str,
+) -> list[T]:
+    """Get or create multiple models using shared key fields.
+
+    Args:
+        cls (type[T]): The Django model class.
+        data (Iterable[dict[str, Any]]): Model data dictionaries.
+        *key_fields (str): Field names used to identify existing rows.
+
+    Returns:
+        list[T]: Existing and newly created model instances.
+    """
+    keys = {model_dict_key(item, *key_fields) for item in data}
+    if len(key_fields) == 1:
+        # WHERE field IN (values, ...)
+        query = Q(**{f'{key_fields[0]}__in': keys})
+    elif keys:
+        # WHERE fields = values1 OR fields = values2 OR ...
+        query = Q()
+        for key in keys:
+            query |= Q(**dict(zip(key_fields, key)))
+    else:
+        # WHERE id IN ()
+        query = Q(pk__in={})
+
+    existing = list(cls.objects.select_for_update().filter(query))
+    existing_keys = {model_object_key(obj, *key_fields) for obj in existing}
+
+    # Exclude duplicate keys
+    missing_data = {
+        key: item
+        for item in data
+        if (key := model_dict_key(item, *key_fields)) not in existing_keys
+    }
+    missing = [build_model(cls, item) for item in missing_data.values()]
+    missing = cls.objects.bulk_create(missing)
+    return existing + missing
+
+
+def make_model_field_dict[T: Model](
+    instances: Iterable[T],
+    *key_fields: str,
+) -> dict[ModelKey[object], T]:
+    """Map model instances by selected field values.
+
+    Args:
+        instances (Iterable[T]): Model instances to index.
+        *key_fields (str): Field names used to build dictionary keys.
+
+    Returns:
+        dict[ModelKey[object], T]: Instances keyed by field values.
+    """
+    return {model_object_key(obj, *key_fields): obj for obj in instances}
+
+
+def get_or_create_model_field_dict[T: Model](
+    cls: type[T],
+    data: Iterable[dict[str, Any]],
+    *key_fields: str,
+) -> dict[ModelKey[object], T]:
+    """Get or create models and map them by selected fields.
+
+    Args:
+        cls (type[T]): The Django model class.
+        data (Iterable[dict[str, Any]]): Model data dictionaries.
+        *key_fields (str): Field names used to build dictionary keys.
+
+    Returns:
+        dict[ModelKey[object], T]: Instances keyed by field values.
+    """
+    instances = get_or_create_models_by_field(cls, data, *key_fields)
+    return make_model_field_dict(instances, *key_fields)
+
+
+def create_model_field_dict[T: Model](
+    cls: type[T],
+    data: Iterable[dict[str, Any]],
+    *key_fields: str,
+) -> dict[ModelKey[object], T]:
+    """Create models and map them by selected fields.
+
+    Args:
+        cls (type[T]): The Django model class.
+        data (Iterable[dict[str, Any]]): Model data dictionaries.
+        *key_fields (str): Field names used to build dictionary keys.
+
+    Returns:
+        dict[ModelKey[object], T]: Created instances keyed by field values.
+    """
+    instances = create_models(cls, data)
+    return make_model_field_dict(instances, *key_fields)
+
+
+def locate_model_ids[T: Model](
     cls: type[T],
     items: Iterable[dict[str, Any]],
     _item_id_field: str = 'id',
     _model_id_field: str = 'id',
     **kwargs: object,
-) -> dict[int, T]:
+) -> set[object]:
+    """Locate and lock model IDs referenced by item dictionaries.
+
+    Args:
+        cls (type[T]): The Django model class.
+        items (Iterable[dict[str, Any]]): Item dictionaries with IDs.
+        _item_id_field (str): Field name in each item containing the ID.
+        _model_id_field (str): Model field used for lookup.
+        **kwargs (object): Additional model lookup filters.
+
+    Returns:
+        set[object]: Existing IDs found in the database.
+
+    Raises:
+        MissingIdsError: If any requested IDs are not found.
+    """
+    all_ids = {item[_item_id_field] for item in items}
+    kwargs = filter_by_fields(cls, kwargs)
+    lookup = {f'{_model_id_field}__in': all_ids} | kwargs
+    existing = set(
+        cls.objects.select_for_update()
+        .filter(**lookup)
+        .values_list(_model_id_field, flat=True)
+    )
+    if missing := all_ids - existing:
+        raise MissingIdsError(missing)
+    return existing
+
+
+def locate_model_ids_dict[T: Model](
+    cls: type[T],
+    items: Iterable[dict[str, Any]],
+    _item_id_field: str = 'id',
+    _model_id_field: str = 'id',
+    **kwargs: object,
+) -> dict[ModelKey[object], T]:
     """Locate multiple model instances from an iterable of item dictionaries.
 
     Retrieves model instances by extracting IDs from item dictionaries and
@@ -239,47 +484,59 @@ def locate_model_items[T: Model](
         items (Iterable[dict[str, Any]]): List of item dictionaries.
         _item_id_field (str): Field name in item dictionary for the ID.
         _model_id_field (str): Field name on the model for lookup.
-        kwargs (object): Additional filter conditions for the model lookup.
+        **kwargs (object): Additional filter conditions for the lookup.
 
     Returns:
-        dict[int, T]: Dictionary mapping item IDs to model instances.
+        dict[ModelKey[object], T]: Dictionary mapping item ID keys
+            to model instances.
 
     Raises:
         MissingIdsError: If any requested IDs are not found in the database.
     """
-    model_items: dict[int, T] = {}
-    missing_ids = set[int]()
+    all_ids = {item[_item_id_field] for item in items}
     kwargs = filter_by_fields(cls, kwargs)
-    for item in items:
-        try:
-            item_id = item[_item_id_field]
-        except KeyError:
-            # Failed to extract the key, just skip this record
-            continue
-        try:
-            lookup = {_model_id_field: item_id} | kwargs
-            model_item = cls.objects.get(**lookup)
-        except cls.DoesNotExist:
-            missing_ids.add(item_id)
-        else:
-            model_items[item_id] = model_item
+    lookup = {f'{_model_id_field}__in': all_ids} | kwargs
 
-    if missing_ids:
+    existing = list(cls.objects.select_for_update().filter(**lookup))
+    existing_ids = {model_object_key(obj, _model_id_field) for obj in existing}
+
+    if missing_ids := all_ids - existing_ids:
         raise MissingIdsError(missing_ids)
-    return model_items
+    return make_model_field_dict(existing, _model_id_field)
+
+
+def build_model[T: Model](
+    cls: type[T],
+    data: dict[str, Any] | None = None,
+    **kwargs: object,
+) -> T:
+    """Build an unsaved model instance from filtered field data.
+
+    Args:
+        cls (type[T]): The Django model class.
+        data (dict[str, Any] | None): Model data dictionary.
+        **kwargs (object): Additional model field values.
+
+    Returns:
+        T: Unsaved model instance.
+    """
+    data = data or {}
+    data |= kwargs
+    data = filter_by_fields(cls, data)
+    return cls(**data)
 
 
 def create_model[T: Model](
     cls: type[T],
-    data: dict[str, object] | None = None,
+    data: dict[str, Any] | None = None,
     **kwargs: object,
 ) -> T:
     """Create a model instance using data filtered to model fields.
 
     Args:
         cls (type[T]): The Django model class.
-        data (dict[str, object] | None): Data to use for creation.
-        kwargs (object): Additional model field values.
+        data (dict[str, Any] | None): Data to use for creation.
+        **kwargs (object): Additional model field values.
 
     Returns:
         T: The created model instance.
@@ -290,9 +547,28 @@ def create_model[T: Model](
     return cls.objects.create(**data)
 
 
+def create_models[T: Model](
+    cls: type[T],
+    data: Iterable[dict[str, Any]],
+) -> list[T]:
+    """Create multiple model instances from field dictionaries.
+
+    Args:
+        cls (type[T]): The Django model class.
+        data (Iterable[dict[str, Any]]): Model data dictionaries.
+
+    Returns:
+        list[T]: Created model instances.
+    """
+    instances = [build_model(cls, item) for item in data]
+    return cls.objects.bulk_create(instances)
+
+
 def get_or_create_model[T: Model](
     cls: type[T],
     defaults: dict[str, object] | None = None,
+    *,
+    _lock: bool = False,
     **kwargs: object,
 ) -> T:
     """Get a model instance or create a new one if not exists.
@@ -300,14 +576,20 @@ def get_or_create_model[T: Model](
     Args:
         cls (type[T]): The Django model class.
         defaults (dict[str, object] | None): Default values for creation.
-        kwargs (object): Lookup fields for existing model instance.
+        _lock (bool): Whether to lock the retrieved instance for update.
+        **kwargs (object): Lookup fields for existing model instance.
 
     Returns:
         T: The retrieved or newly created model instance.
     """
     defaults = defaults and filter_by_fields(cls, defaults)
     kwargs = filter_by_fields(cls, kwargs)
-    item, _ = cls.objects.get_or_create(defaults=defaults, **kwargs)
+    queryset = cls.objects
+    if _lock:
+        queryset = queryset.select_for_update()
+    item, created = queryset.get_or_create(defaults=defaults, **kwargs)
+    if created and _lock:
+        lock_model_instance(item)
     return item
 
 
@@ -579,7 +861,15 @@ def notify_order_state_on_commit(
 
     def notify_callback() -> None:
         """Reload the order and send state notifications."""
-        order = Order.objects.get(pk=order_id)
+        items = OrderItem.objects.select_related(
+            'shop_offer',
+            'shop_offer__product',
+        )
+        order = (
+            Order.objects.select_related('user')
+            .prefetch_related(Prefetch('items', items))
+            .get(pk=order_id)
+        )
         notify_order_state_mail(request, order)
 
     transaction.on_commit(notify_callback)
@@ -610,6 +900,45 @@ def get_order_context(
     }
 
 
+_ORDER_ITEM_TEMPLATE_ATTRS: Final = (
+    'pk',
+    'product_name',
+    'quantity',
+    'price',
+    'sum',
+    'part_number',
+    'model',
+)
+
+
+def get_order_items_context(
+    items: Iterable[OrderItem],
+    base_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build email context for a collection of order items.
+
+    Args:
+        items (Iterable[OrderItem]): Order items to include.
+        base_context (dict[str, Any] | None): Shared email context.
+
+    Returns:
+        dict[str, Any]: Context data with items and total sum.
+    """
+    total_sum = 0
+    template_items = []
+    for item in items:
+        total_sum += item.sum
+        template_items.append(
+            {attr: getattr(item, attr) for attr in _ORDER_ITEM_TEMPLATE_ATTRS}
+        )
+
+    base_context = base_context or {}
+    return base_context | {
+        'items': template_items,
+        'total_sum': total_sum,
+    }
+
+
 def get_order_user_context(
     order: Order,
     base_context: dict[str, Any] | None = None,
@@ -623,17 +952,8 @@ def get_order_user_context(
     Returns:
         dict[str, Any]: Context data for the user email.
     """
-    items = list(
-        OrderItem.objects.filter(order=order)
-        .select_related('shop_offer__product')
-        .order_by('pk')
-    )
-    total_sum = sum(x.sum for x in items)
-    base_context = base_context or {}
-    return base_context | {
-        'items': items,
-        'total_sum': total_sum,
-    }
+    items = list(order.items.all())
+    return get_order_items_context(items, base_context)
 
 
 ORDER_CREATED_TEMPLATES: Final = EmailTemplateSet(
@@ -734,35 +1054,25 @@ def get_notify_shop_templates(state: OrderState) -> EmailTemplateSet | None:
 
 
 def get_shop_context(
-    order: Order,
     shop: Shop,
     base_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build email context for one shop's items in an order.
 
     Args:
-        order (Order): The order containing shop items.
         shop (Shop): The shop whose line items should be included.
         base_context (dict[str, Any] | None): Shared email context.
 
     Returns:
         dict[str, Any]: Context data for the shop admin email.
     """
-    items = list(
-        OrderItem.objects.filter(
-            order=order,
-            shop_offer__shop=shop,
-        )
-        .select_related('shop_offer__product')
-        .order_by('pk')
-    )
-    total_sum = sum(x.sum for x in items)
-    base_context = base_context or {}
-    return base_context | {
-        'shop_name': shop.name,
-        'items': items,
-        'total_sum': total_sum,
-    }
+    items = [
+        item
+        for offer in shop.offers_for_order
+        for item in offer.order_items_for_order
+    ]
+    base_context = get_order_items_context(items, base_context)
+    return base_context | {'shop_name': shop.name}
 
 
 def notify_order_state_shop_mail(
@@ -782,18 +1092,37 @@ def notify_order_state_shop_mail(
         # No need to notify any admins
         return
 
-    base_context = get_order_context(request, order, 'shop-order')
-    shops = (
+    # Prefetch all the order items for all shops for this order
+    order_items_for_order = Prefetch(
+        'order_items',
+        queryset=OrderItem.objects.select_related(
+            'shop_offer',
+            'shop_offer__product',
+        ).filter(order_id=order.pk),
+        to_attr='order_items_for_order',
+    )
+    offers_for_order = Prefetch(
+        'offers',
+        queryset=ShopOffer.objects.filter(
+            order_items__order_id=order.pk
+        ).prefetch_related(
+            order_items_for_order,
+        ),
+        to_attr='offers_for_order',
+    )
+    shops = list(
         Shop.objects.filter(offers__order_items__order_id=order.pk)
         .distinct()
         .select_related('user')
+        .prefetch_related(offers_for_order)
         .all()
     )
 
+    base_context = get_order_context(request, order, 'shop-order')
     for shop in shops:
         admin: User = shop.user
         email = cast(str, admin.email)
-        context = get_shop_context(order, shop, base_context)
+        context = get_shop_context(shop, base_context)
         render_and_send_mail(templates, context, email, from_email)
 
 
@@ -858,8 +1187,8 @@ def debug_process_file_url[**P](
 
         Args:
             url (str): The URL to process (http://, https://, or file://).
-            args: Additional positional arguments for the decorated function.
-            kwargs: Additional keyword arguments for the decorated function.
+            *args (Any): Positional arguments for the decorated function.
+            **kwargs (Any): Keyword arguments for the decorated function.
 
         Returns:
             httpx.Response: HTTP response object.
@@ -983,6 +1312,24 @@ def update_shop_pricing_yaml(user: User, url: str, content: str):
     update_shop_pricing(user, url, data)
 
 
+def make_category_dict(
+    data: Iterable[dict[str, Any]],
+) -> dict[object, Category]:
+    """Map uploaded category IDs to persisted category models.
+
+    Args:
+        data (Iterable[dict[str, Any]]): Uploaded category dictionaries.
+
+    Returns:
+        dict[object, Category]: Categories keyed by uploaded category ID.
+    """
+    category_data = [{'name': item['name']} for item in data]
+    categories = get_or_create_model_field_dict(
+        Category, category_data, 'name'
+    )
+    return {item['id']: categories[item['name']] for item in data}
+
+
 @transaction.atomic
 def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
     """Apply shop pricing from processed input data.
@@ -996,40 +1343,67 @@ def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
     name = data['shop']
 
     try:
-        shop = get_model(Shop, user=user)
+        shop = get_and_lock_model(Shop, user=user)
     except Shop.DoesNotExist:
         shop = create_model(Shop, user=user, name=name, url=url)
+        lock_model_instance(shop)
     else:
         shop.name = name
         shop.url = url
-        shop.save()
+        shop.save(update_fields=['name', 'url'])
 
     # Use category IDs from document for in-document mapping only
-    categories = {
-        item['id']: get_or_create_model(Category, name=item['name'])
-        for item in data['categories']
-    }
+    categories = make_category_dict(data['categories'])
 
     # Clear all shop offers but reuse product records
     ShopOffer.objects.filter(shop_id=shop.pk).delete()
 
-    for item in data['goods']:
+    goods = data['goods']
+    for item in goods:
         item['category'] = categories[item['category']]
-        product = get_or_create_model(Product, item, name=item['name'])
-        offer = create_model(ShopOffer, item, product=product, shop=shop)
+    products = get_or_create_model_field_dict(Product, goods, 'name')
 
-        for name, value in item['parameters'].items():
-            parameter = get_or_create_model(Parameter, name=name)
-            create_model(
-                ProductParameter,
-                parameter=parameter,
-                offer=offer,
-                value=value,
-            )
+    offer_fields = ('product', 'model')
+    for item in goods:
+        item['shop'] = shop
+        item['product'] = products[item['name']]
+    offers = create_model_field_dict(ShopOffer, goods, *offer_fields)
+
+    params_data = [
+        {
+            'name': name,
+            'value': value,
+            'offer': offers[model_dict_key(item, *offer_fields)],
+        }
+        for item in goods
+        for name, value in item['parameters'].items()
+    ]
+    params = get_or_create_model_field_dict(Parameter, params_data, 'name')
+
+    for item in params_data:
+        item['parameter'] = params[item['name']]
+    create_models(ProductParameter, params_data)
+
+
+def get_basket_for_update(user: User) -> Basket:
+    """Return the user's basket locked for update.
+
+    Args:
+        user (User): The basket owner.
+
+    Returns:
+        Basket: Locked basket order.
+    """
+    return get_or_create_model(
+        Basket,
+        _lock=True,
+        user=user,
+        state=OrderState.BASKET,
+    )
 
 
 @transaction.atomic
-def add_to_basket(user: User, request: Request) -> None:
+def add_to_basket(user: User, items: list[dict[str, Any]]) -> None:
     """Add items to the user's shopping basket from request data.
 
     Creates a new basket order if needed and adds shop offer items to it.
@@ -1038,27 +1412,43 @@ def add_to_basket(user: User, request: Request) -> None:
 
     Args:
         user (User): The user adding items to their basket.
-        request (Request): The request object containing basket items.
+        items (list[dict[str, Any]]): Basket item payloads.
     """
-    data = validate_request(AddToBasketSerializer, request)
+    basket = get_basket_for_update(user)
+    offer_ids = locate_model_ids(ShopOffer, items, 'shop_offer_id')
 
-    basket = get_or_create_model(Order, user=user, state=OrderState.BASKET)
-    offers = locate_model_items(ShopOffer, data['items'], 'shop_offer_id')
+    # Remove any duplicate offer ids
+    offer_quantity: dict[object, int] = defaultdict(int)
+    for item in items:
+        offer_id = item['shop_offer_id']
+        quantity = item['quantity']
+        offer_quantity[offer_id] += quantity
 
-    for item in data['items']:
-        offer = offers[item['shop_offer_id']]
-        try:
-            order_item = get_model(OrderItem, order=basket, shop_offer=offer)
-        except OrderItem.DoesNotExist:
-            create_model(OrderItem, item, shop_offer=offer, order=basket)
-        else:
+    query = Q(order=basket, shop_offer_id__in=offer_ids)
+    existing = list(OrderItem.objects.select_for_update().filter(query))
+    order_items = {item.shop_offer_id: item for item in existing}
+
+    missing: list[OrderItem] = []
+
+    for offer_id, quantity in offer_quantity.items():
+        if order_item := order_items.get(offer_id):
             # If item already in the basket, just increase its quantity
-            order_item.quantity += item['quantity']
-            order_item.save()
+            order_item.quantity += quantity
+        else:
+            order_item = OrderItem(
+                shop_offer_id=offer_id, order=basket, quantity=quantity
+            )
+            missing.append(order_item)
+
+    if missing:
+        OrderItem.objects.bulk_create(missing)
+
+    if existing:
+        OrderItem.objects.bulk_update(existing, ['quantity'])
 
 
 @transaction.atomic
-def edit_basket(user: User, request: Request) -> None:
+def edit_basket(user: User, items: list[dict[str, Any]]) -> None:
     """Update quantities of items in the user's shopping basket.
 
     Modifies the quantity of existing order items in the user's basket
@@ -1066,20 +1456,17 @@ def edit_basket(user: User, request: Request) -> None:
 
     Args:
         user (User): The user updating their basket.
-        request (Request): The request object containing updated items.
+        items (list[dict[str, Any]]): Basket item payloads.
 
     Raises:
         BasketModifyError: If there's a database error during the operation.
     """
-    data = validate_request(EditBasketSerializer, request)
-
-    basket = get_or_create_model(Order, user=user, state=OrderState.BASKET)
-    order_items = locate_model_items(OrderItem, data['items'], order=basket)
-
-    for item in data['items']:
+    basket = get_basket_for_update(user)
+    order_items = locate_model_ids_dict(OrderItem, items, order=basket)
+    for item in items:
         order_item = order_items[item['id']]
         order_item.quantity = item['quantity']
-        order_item.save()
+    OrderItem.objects.bulk_update(order_items.values(), ['quantity'])
 
 
 def get_order_state(order_id: object) -> OrderState:
@@ -1092,21 +1479,6 @@ def get_order_state(order_id: object) -> OrderState:
         OrderState: The order state stored in the database.
     """
     return Order.objects.only('state').get(pk=order_id).state
-
-
-def is_order_active(order_id: object) -> bool:
-    """Return whether an order ID refers to an active order.
-
-    Args:
-        order_id (object): The order primary key, or None.
-
-    Returns:
-        bool: True when the order is active.
-    """
-    if order_id is None:
-        return False
-    state = get_order_state(order_id)
-    return state in OrderState.active()
 
 
 type OrderItems = Iterable[OrderItem]
@@ -1139,7 +1511,9 @@ def _lock_order_items(order: Order) -> OrderData:
     offers = {
         offer.pk: offer
         for offer in (
-            ShopOffer.objects.select_for_update().filter(pk__in=offer_ids)
+            ShopOffer.objects.select_for_update()
+            .select_related('shop')
+            .filter(pk__in=offer_ids)
         )
     }
     return OrderData(order, items, offers)
@@ -1251,9 +1625,8 @@ def checkout_basket(
     basket, items, offers = _lock_order_items(basket)
     _validate_basket_items(items, offers)
 
-    order = create_model(
-        Order,
-        user=basket.user,
+    order = Order.objects.create(
+        user_id=basket.user_id,
         contact=contact,
         state=OrderState.NEW,
     )
@@ -1261,9 +1634,7 @@ def checkout_basket(
     _reserve_stock(items, offers)
 
     # Move basket items to the created order
-    for item in items:
-        item.order_id = order.pk
-    OrderItem.objects.bulk_update(items, ['order_id'])
+    order.items.set(items, bulk=True, clear=True)
 
     if notify_request is not None:
         notify_order_state_on_commit(notify_request, order.pk)
@@ -1307,9 +1678,11 @@ def change_order_state(
         _reserve_stock(items, offers)
 
     order.state = new_state
+    update_fields = ['state']
     if contact is not None:
         order.contact = contact
-    order.save()
+        update_fields.append('contact')
+    order.save(update_fields=update_fields)
 
     if notify_request is not None:
         notify_order_state_on_commit(notify_request, order.pk)

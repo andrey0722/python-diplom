@@ -31,9 +31,9 @@
         <tbody>
             {% for item in items %}
             <tr>
-                <td class="email-number">{{ item.shop_offer.part_number }}</td>
+                <td class="email-number">{{ item.part_number }}</td>
                 <td>{{ item.product_name }}</td>
-                <td>{{ item.shop_offer.model }}</td>
+                <td>{{ item.model }}</td>
                 <td class="email-number">{{ item.price }}</td>
                 <td class="email-number">{{ item.quantity }}</td>
                 <td class="email-number">{{ item.sum }}</td>

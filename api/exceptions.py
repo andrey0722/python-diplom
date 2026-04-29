@@ -54,7 +54,12 @@ class ErrorDict(defaultdict[str, ErrorList]):
     """Convenience class for collecting field errors."""
 
     def __init__(self, *args: object, **kwargs: object) -> None:
-        """Set the default factory."""
+        """Set the default factory.
+
+        Args:
+            *args (object): Positional dictionary arguments.
+            **kwargs (object): Keyword dictionary arguments.
+        """
         super().__init__(ErrorList, *args, **kwargs)
 
 
