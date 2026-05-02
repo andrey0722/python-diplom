@@ -54,8 +54,9 @@ from .models import Token
 from .models import User
 from .services import change_order_state
 from .services import checkout_basket
-from .services import get_order_items_context
 from .services import get_order_state
+from .templates import get_order_context
+from .templates import get_order_items_context
 
 
 def get_admin_view(
@@ -1041,9 +1042,10 @@ class BasketAdmin(
             'form': form,
         }
         items = list(basket.items.all())
-        context = get_order_items_context(items, context)
+        order_context = get_order_context(request, basket)
+        context.update(get_order_items_context(items, order_context))
         basket_template = getattr(self, 'basket_template', '')
-        return TemplateResponse(request, basket_template, context)
+        return TemplateResponse(request, basket_template, dict(context))
 
 
 @admin.register(PlacedOrder)

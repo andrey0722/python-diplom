@@ -15,7 +15,7 @@
 {% endif %}
 
 {% translate "View the cancelled order details using the link below:" %}
-{{ order_url }}
+{{ user_order_url }}
 
 {% translate "If you have questions about this cancellation, please contact customer support." %}
 

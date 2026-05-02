@@ -2,7 +2,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Mapping
-from dataclasses import dataclass
 import functools
 import json
 import logging
@@ -22,15 +21,9 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.contrib.sites.shortcuts import get_current_site
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Model
-from django.db.models import Prefetch
 from django.db.models import Q
-from django.http import HttpRequest
-from django.template.loader import render_to_string
-from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 import httpx
 from rest_framework.request import Request
@@ -66,11 +59,14 @@ from .models import User
 from .serializers import EmailConfirmSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import ShopPricingSerializer
+from .tasks import notify_order_state
+from .tasks import send_password_reset_mail
+from .tasks import send_user_verification_mail
+from .templates import AnyRequest
+from .templates import get_order_context
+from .templates import get_verify_context
 
 logger = logging.getLogger(__name__)
-
-
-type AnyRequest = HttpRequest | Request
 
 
 def serialize(cls: type[BaseSerializer], instance: object) -> dict[str, Any]:
@@ -655,97 +651,27 @@ def check_password_reset_token(user: User | None, token: str | None) -> bool:
     return password_reset_token_gen.check_token(user, token)
 
 
-@dataclass(frozen=True, slots=True)
-class EmailTemplateSet:
-    """Template paths used to render one email message."""
-
-    subject: str
-    text: str
-    html: str | None = None
-
-
-def get_request_context(request: AnyRequest) -> dict[str, Any]:
-    """Build the base context used for email message templates.
-
-    Args:
-        request (AnyRequest): The request object.
-
-    Returns:
-        dict[str, Any]: Context dictionary for the template.
-    """
-    if isinstance(request, Request):
-        # `Request` works as a proxy over `HttpRequest`
-        request = cast(HttpRequest, request)
-    current_site = get_current_site(request)
-    site_name = current_site.name
-    domain = current_site.domain
-    use_https = request.is_secure()
-    return {
-        'domain': domain,
-        'site_name': site_name,
-        'protocol': 'https' if use_https else 'http',
-    }
-
-
 def format_request_data(
-    data: object,
     serializer: type[BaseSerializer],
+    **kwargs: object,
 ) -> str:
     """Format serializer data as pretty-printed JSON for email templates.
 
     Args:
-        data (object): The raw data to validate and serialize.
         serializer (type[BaseSerializer]): The serializer class for `data`.
+        **kwargs (object): The raw data to validate and serialize.
 
     Returns:
         str: The serialized JSON string.
     """
-    request_data = serialize(serializer, data)
+    request_data = serialize_dict(serializer, **kwargs)
     return json.dumps(request_data, indent=4)
 
 
-def get_verify_context(
-    request: AnyRequest,
-    view_name: str,
-    request_type: str,
-    request_data: object,
-    serializer_cls: type[BaseSerializer],
-) -> dict[str, Any]:
-    """Build email context for token verification requests.
-
-    Args:
-        request (AnyRequest): The request used to build absolute URLs.
-        view_name (str): URL name for the verification endpoint.
-        request_type (str): HTTP method shown in the email.
-        request_data (object): Payload included in the email instructions.
-        serializer_cls (type[BaseSerializer]): Serializer for the payload.
-
-    Returns:
-        dict[str, Any]: Context data for verification email templates.
-    """
-    path = reverse(view_name)
-    request_url = request.build_absolute_uri(path)
-    request_data = format_request_data(request_data, serializer_cls)
-    context = get_request_context(request)
-    return context | {
-        'request_type': request_type,
-        'request_url': request_url,
-        'request_data': request_data,
-    }
-
-
-EMAIL_VERIFICATION_TEMPLATES: Final = EmailTemplateSet(
-    subject='api/email_verification_subject.txt',
-    text='api/email_verification_email.txt',
-    html='api/email_verification_email.html',
-)
-
-
-def send_email_verification_mail(
+def verify_user_email(
     request: AnyRequest,
     user: User | None,
     email: str | None = None,
-    from_email: str | None = None,
 ) -> str | None:
     """Send email verification mail to user.
 
@@ -753,7 +679,6 @@ def send_email_verification_mail(
         request (AnyRequest): The request object.
         user (User | None): The user to send mail to.
         email (str | None): The email address.
-        from_email (str | None): From email address.
 
     Returns:
         str | None: Email confirmation token generated if any.
@@ -765,34 +690,26 @@ def send_email_verification_mail(
         logger.info('User %s already confirmed', user.email)
         return None
 
-    templates = EMAIL_VERIFICATION_TEMPLATES
     email = cast(str, user.email)
     token = email_verify_token_gen.make_token(user)
+    request_data = format_request_data(
+        EmailConfirmSerializer, email=email, token=token
+    )
     context = get_verify_context(
         request=request,
+        token=token,
         view_name='email-confirm',
         request_type='POST',
-        request_data={'email': email, 'token': token},
-        serializer_cls=EmailConfirmSerializer,
+        request_data=request_data,
     )
-    context['token'] = token
-
-    render_and_send_mail(templates, context, email, from_email)
+    send_user_verification_mail.delay(email, context)
     return token
 
 
-PASSWORD_RESET_TEMPLATES: Final = EmailTemplateSet(
-    subject='api/password_reset_subject.txt',
-    text='api/password_reset_email.txt',
-    html='api/password_reset_email.html',
-)
-
-
-def send_password_reset_mail(
+def reset_user_password(
     request: AnyRequest,
     user: User | None,
     email: str | None = None,
-    from_email: str | None = None,
 ) -> str | None:
     """Send a password reset email to the given user.
 
@@ -800,7 +717,6 @@ def send_password_reset_mail(
         request (AnyRequest): The request object.
         user (User | None): The user who will receive the reset email.
         email (str | None): Optional override email address.
-        from_email (str | None): Optional from-address for the email.
 
     Returns:
         str | None: Password reset token generated if any.
@@ -812,352 +728,34 @@ def send_password_reset_mail(
         logger.info('User %s is inactive', user.email)
         return None
 
-    templates = PASSWORD_RESET_TEMPLATES
     email = cast(str, user.email)
     token = password_reset_token_gen.make_token(user)
+    request_data = format_request_data(
+        PasswordResetConfirmSerializer,
+        email=email,
+        password='your_new_password',
+        token=token,
+    )
     context = get_verify_context(
         request=request,
+        token=token,
         view_name='password-reset-confirm',
         request_type='POST',
-        request_data={
-            'email': email,
-            'password': 'your_new_password',
-            'token': token,
-        },
-        serializer_cls=PasswordResetConfirmSerializer,
+        request_data=request_data,
     )
-    context['token'] = token
-
-    render_and_send_mail(templates, context, email, from_email)
+    send_password_reset_mail.delay(email, context)
     return token
 
 
-def notify_order_state_mail(
-    request: AnyRequest,
-    order: Order,
-    from_email: str | None = None,
-) -> None:
-    """Send all emails required by the current order state.
-
-    Args:
-        request (AnyRequest): The request used to build email links.
-        order (Order): The order whose state should be announced.
-        from_email (str | None): Optional sender email address.
-    """
-    notify_order_state_user_mail(request, order, from_email)
-    notify_order_state_shop_mail(request, order, from_email)
-
-
-def notify_order_state_on_commit(
-    request: AnyRequest,
-    order_id: object,
-) -> None:
+def notify_order_state_on_commit(request: AnyRequest, order: Order) -> None:
     """Schedule order state notifications after transaction commit.
 
     Args:
         request (AnyRequest): The request used to build email links.
-        order_id (object): Primary key of the order to notify about.
+        order (Order): The order to notify about.
     """
-
-    def notify_callback() -> None:
-        """Reload the order and send state notifications."""
-        items = OrderItem.objects.select_related(
-            'shop_offer',
-            'shop_offer__product',
-        )
-        order = (
-            Order.objects.select_related('user')
-            .prefetch_related(Prefetch('items', items))
-            .get(pk=order_id)
-        )
-        notify_order_state_mail(request, order)
-
-    transaction.on_commit(notify_callback)
-
-
-def get_order_context(
-    request: AnyRequest,
-    order: Order,
-    view_name: str,
-) -> dict[str, Any]:
-    """Build email context shared by order notification templates.
-
-    Args:
-        request (AnyRequest): The request used to build the order URL.
-        order (Order): The order included in the email context.
-        view_name (str): URL name for the order detail endpoint.
-
-    Returns:
-        dict[str, Any]: Context data for order email templates.
-    """
-    path = reverse(view_name, kwargs={'pk': order.pk})
-    order_url = request.build_absolute_uri(path)
-    context = get_request_context(request)
-    return context | {
-        'order_id': order.pk,
-        'order_state': OrderState(order.state).label,
-        'order_url': order_url,
-    }
-
-
-_ORDER_ITEM_TEMPLATE_ATTRS: Final = (
-    'pk',
-    'product_name',
-    'quantity',
-    'price',
-    'sum',
-    'part_number',
-    'model',
-)
-
-
-def get_order_items_context(
-    items: Iterable[OrderItem],
-    base_context: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build email context for a collection of order items.
-
-    Args:
-        items (Iterable[OrderItem]): Order items to include.
-        base_context (dict[str, Any] | None): Shared email context.
-
-    Returns:
-        dict[str, Any]: Context data with items and total sum.
-    """
-    total_sum = 0
-    template_items = []
-    for item in items:
-        total_sum += item.sum
-        template_items.append(
-            {attr: getattr(item, attr) for attr in _ORDER_ITEM_TEMPLATE_ATTRS}
-        )
-
-    base_context = base_context or {}
-    return base_context | {
-        'items': template_items,
-        'total_sum': total_sum,
-    }
-
-
-def get_order_user_context(
-    order: Order,
-    base_context: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build email context for all items in an order.
-
-    Args:
-        order (Order): The order containing shop items.
-        base_context (dict[str, Any] | None): Shared email context.
-
-    Returns:
-        dict[str, Any]: Context data for the user email.
-    """
-    items = list(order.items.all())
-    return get_order_items_context(items, base_context)
-
-
-ORDER_CREATED_TEMPLATES: Final = EmailTemplateSet(
-    subject='api/order_created_subject.txt',
-    text='api/order_created_email.txt',
-    html='api/order_created_email.html',
-)
-
-
-ORDER_CANCELLED_TEMPLATES: Final = EmailTemplateSet(
-    subject='api/order_cancelled_subject.txt',
-    text='api/order_cancelled_email.txt',
-    html='api/order_cancelled_email.html',
-)
-
-
-ORDER_STATE_CHANGE_TEMPLATES: Final = EmailTemplateSet(
-    subject='api/order_state_change_subject.txt',
-    text='api/order_state_change_email.txt',
-    html='api/order_state_change_email.html',
-)
-
-
-@functools.cache
-def get_notify_user_templates(state: OrderState) -> EmailTemplateSet | None:
-    """Return user notification templates for the order state.
-
-    Args:
-        state (OrderState): The current order state.
-
-    Returns:
-        EmailTemplateSet | None: Matching templates, or None when no
-            user notification is needed.
-    """
-    if state == OrderState.NEW:
-        return ORDER_CREATED_TEMPLATES
-    if state == OrderState.CANCELLED:
-        return ORDER_CANCELLED_TEMPLATES
-    if state in OrderState.active():
-        return ORDER_STATE_CHANGE_TEMPLATES
-    return None
-
-
-def notify_order_state_user_mail(
-    request: AnyRequest,
-    order: Order,
-    from_email: str | None = None,
-) -> None:
-    """Send an order state notification to the order owner.
-
-    Args:
-        request (AnyRequest): The request used to build email links.
-        order (Order): The order whose owner should be notified.
-        from_email (str | None): Optional sender email address.
-    """
-    templates = get_notify_user_templates(order.state)
-    if templates is None:
-        # No need to notify the user
-        return
-
-    user = order.user
-    email = cast(str, user.email)
-    context = get_order_context(request, order, 'order')
-    context = get_order_user_context(order, context)
-    render_and_send_mail(templates, context, email, from_email)
-
-
-ORDER_PLACED_SHOP_ADMIN_TEMPLATES: Final = EmailTemplateSet(
-    subject='api/order_placed_shop_admin_subject.txt',
-    text='api/order_placed_shop_admin_email.txt',
-    html='api/order_placed_shop_admin_email.html',
-)
-
-
-ORDER_CANCELLED_SHOP_ADMIN_TEMPLATES: Final = EmailTemplateSet(
-    subject='api/order_cancelled_shop_admin_subject.txt',
-    text='api/order_cancelled_shop_admin_email.txt',
-    html='api/order_cancelled_shop_admin_email.html',
-)
-
-
-@functools.cache
-def get_notify_shop_templates(state: OrderState) -> EmailTemplateSet | None:
-    """Return shop admin notification templates for the order state.
-
-    Args:
-        state (OrderState): The current order state.
-
-    Returns:
-        EmailTemplateSet | None: Matching templates, or None when shop
-            admins do not need a notification.
-    """
-    if state == OrderState.NEW:
-        return ORDER_PLACED_SHOP_ADMIN_TEMPLATES
-    if state == OrderState.CANCELLED:
-        return ORDER_CANCELLED_SHOP_ADMIN_TEMPLATES
-    return None
-
-
-def get_shop_context(
-    shop: Shop,
-    base_context: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build email context for one shop's items in an order.
-
-    Args:
-        shop (Shop): The shop whose line items should be included.
-        base_context (dict[str, Any] | None): Shared email context.
-
-    Returns:
-        dict[str, Any]: Context data for the shop admin email.
-    """
-    items = [
-        item
-        for offer in shop.offers_for_order
-        for item in offer.order_items_for_order
-    ]
-    base_context = get_order_items_context(items, base_context)
-    return base_context | {'shop_name': shop.name}
-
-
-def notify_order_state_shop_mail(
-    request: AnyRequest,
-    order: Order,
-    from_email: str | None = None,
-) -> None:
-    """Send order notifications to affected shop admins.
-
-    Args:
-        request (AnyRequest): The request used to build email links.
-        order (Order): The order whose shops should be notified.
-        from_email (str | None): Optional sender email address.
-    """
-    templates = get_notify_shop_templates(order.state)
-    if templates is None:
-        # No need to notify any admins
-        return
-
-    # Prefetch all the order items for all shops for this order
-    order_items_for_order = Prefetch(
-        'order_items',
-        queryset=OrderItem.objects.select_related(
-            'shop_offer',
-            'shop_offer__product',
-        ).filter(order_id=order.pk),
-        to_attr='order_items_for_order',
-    )
-    offers_for_order = Prefetch(
-        'offers',
-        queryset=ShopOffer.objects.filter(
-            order_items__order_id=order.pk
-        ).prefetch_related(
-            order_items_for_order,
-        ),
-        to_attr='offers_for_order',
-    )
-    shops = list(
-        Shop.objects.filter(offers__order_items__order_id=order.pk)
-        .distinct()
-        .select_related('user')
-        .prefetch_related(offers_for_order)
-        .all()
-    )
-
-    base_context = get_order_context(request, order, 'shop-order')
-    for shop in shops:
-        admin: User = shop.user
-        email = cast(str, admin.email)
-        context = get_shop_context(shop, base_context)
-        render_and_send_mail(templates, context, email, from_email)
-
-
-def render_and_send_mail(
-    templates: EmailTemplateSet,
-    context: dict[str, Any],
-    to_email: str,
-    from_email: str | None = None,
-) -> None:
-    """Send a django.core.mail.EmailMultiAlternatives to `to_email`.
-
-    Args:
-        templates (EmailTemplateSet): Templates for email message rendering.
-        context (dict[str, Any]): Template context data.
-        to_email (str): Recipient email address.
-        from_email (str | None): Optional sender email address.
-    """
-    context['email'] = to_email
-    subject = render_to_string(templates.subject, context)
-    # Email subject *must not* contain newlines
-    subject = ''.join(subject.splitlines())
-
-    text = render_to_string(templates.text, context)
-    html = templates.html and render_to_string(templates.html, context)
-
-    try:
-        send_mail(
-            subject=subject,
-            message=text,
-            from_email=from_email,
-            recipient_list=[to_email],
-            html_message=html,
-        )
-    except Exception:
-        logger.exception('Failed to send email to user %s', to_email)
+    order_context = get_order_context(request, order)
+    notify_order_state.delay_on_commit(order.pk, order_context)
 
 
 def debug_process_file_url[**P](
@@ -1637,7 +1235,7 @@ def checkout_basket(
     order.items.set(items, bulk=True, clear=True)
 
     if notify_request is not None:
-        notify_order_state_on_commit(notify_request, order.pk)
+        notify_order_state_on_commit(notify_request, order)
 
     return order
 
@@ -1685,7 +1283,7 @@ def change_order_state(
     order.save(update_fields=update_fields)
 
     if notify_request is not None:
-        notify_order_state_on_commit(notify_request, order.pk)
+        notify_order_state_on_commit(notify_request, order)
 
 
 _ALLOWED_ORDER_STATE_TRANSITIONS: Final[dict[OrderState, set[OrderState]]] = {

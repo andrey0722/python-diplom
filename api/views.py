@@ -70,13 +70,13 @@ from .services import check_email_verify_token
 from .services import check_password_reset_token
 from .services import checkout_basket
 from .services import edit_basket
+from .services import reset_user_password
 from .services import retry_get_url
-from .services import send_email_verification_mail
-from .services import send_password_reset_mail
 from .services import serialize_dict
 from .services import update_shop_pricing_yaml
 from .services import validate_request
 from .services import validate_view
+from .services import verify_user_email
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +203,7 @@ class UserRegisterView(CreateAPIView):
             serializer (BaseSerializer): Serializer with validated user data.
         """
         user = serializer.save()
-        send_email_verification_mail(self.request, user)
+        verify_user_email(self.request, user)
 
 
 class SendEmailVerificationView(SendVerificationView):
@@ -211,7 +211,7 @@ class SendEmailVerificationView(SendVerificationView):
 
     serializer_class = SendEmailVerificationSerializer
     response_message = _('Verification email is sent if needed.')
-    send_mail = staticmethod(send_email_verification_mail)
+    send_mail = staticmethod(verify_user_email)
 
 
 class EmailConfirmView(TokenConfirmView):
@@ -241,7 +241,7 @@ class SendPasswordResetView(SendVerificationView):
 
     serializer_class = SendPasswordResetSerializer
     response_message = _('Password reset email is sent if needed.')
-    send_mail = staticmethod(send_password_reset_mail)
+    send_mail = staticmethod(reset_user_password)
 
 
 class PasswordResetConfirmView(TokenConfirmView):

@@ -15,7 +15,7 @@
 {% endif %}
 
 {% translate "View the cancelled order details from the link below:" %}
-{{ order_url }}
+{{ shop_order_url }}
 
 {% translate "Please stop processing the shop items for this order." %}
 {% endblock %}

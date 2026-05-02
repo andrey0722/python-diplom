@@ -15,7 +15,7 @@
 {% endif %}
 
 {% translate "View your order details using the link below:" %}
-{{ order_url }}
+{{ user_order_url }}
 
 {% translate "You will receive updates when the order status changes." %}
 

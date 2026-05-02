@@ -104,6 +104,15 @@ TEMPLATES = [
     },
 ]
 
+# Celery configuration
+# https://docs.celeryq.dev/en/stable/userguide/configuration.html
+
+CELERY_BROKER_URL = env.url(
+    'CELERY_BROKER_URL',
+    default='redis://default:redis_password@localhost:6379/0',  # pyright: ignore[reportArgumentType]
+)
+CELERY_WORKER_CONCURRENCY = env.int('CELERY_WORKER_CONCURRENCY', 1)
+
 
 APP_LOG_LEVEL = 'DEBUG' if DEBUG else 'INFO'
 DJANGO_DB_LOG_LEVEL = 'DEBUG' if SQL_TRACE else 'WARNING'
