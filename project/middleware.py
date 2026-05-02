@@ -13,6 +13,11 @@ from django.utils.deprecation import MiddlewareMixin
 logger = logging.getLogger(__name__)
 
 
+def show_debug_toolbar(request: HttpRequest):  # noqa: ARG001
+    """Show Django Debug Toolbar in local Docker development."""
+    return settings.DEBUG
+
+
 type RequestHandler = Callable[[HttpRequest], HttpResponse]
 
 

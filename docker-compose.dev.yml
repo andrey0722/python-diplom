@@ -1,0 +1,53 @@
+services:
+  backend:
+    ports:
+      - 8000:8000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    develop:
+      watch:
+        - action: restart
+          path: .env
+        - action: sync+restart
+          path: project
+          target: /project/project
+        - action: sync+restart
+          path: api
+          target: /project/api
+        - action: rebuild
+          path: requirements.txt
+        - action: rebuild
+          path: Dockerfile
+
+  migrate:
+    profiles: !reset []
+
+  celery:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    develop:
+      watch:
+        - action: restart
+          path: .env
+        - action: sync+restart
+          path: project
+          target: /project/project
+        - action: sync+restart
+          path: api
+          target: /project/api
+        - action: rebuild
+          path: requirements.txt
+        - action: rebuild
+          path: Dockerfile
+
+  db:
+    ports:
+      - 55432:5432
+
+  proxy:
+    develop:
+      watch:
+        - action: restart
+          path: ./nginx.conf

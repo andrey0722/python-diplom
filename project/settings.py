@@ -82,9 +82,9 @@ if DEBUG:
         *MIDDLEWARE,
     ]
 
-    INTERNAL_IPS = [
-        '127.0.0.1',
-    ]
+    DEBUG_TOOLBAR_CONFIG = {
+        'SHOW_TOOLBAR_CALLBACK': 'project.middleware.show_debug_toolbar',
+    }
 
 
 ROOT_URLCONF = 'project.urls'
@@ -261,7 +261,10 @@ WSGI_APPLICATION = 'project.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db('DJANGO_DATABASE_URL', default='sqlite:///db.sqlite3'),  # type: ignore[reportArgumentType]
+    'default': env.db(
+        'DATABASE_URL',
+        default='sqlite:///db.sqlite3',  # type: ignore[reportArgumentType]
+    ),
 }
 
 AUTH_USER_MODEL = 'api.User'

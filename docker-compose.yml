@@ -1,0 +1,131 @@
+x-backend-service: &backend-service
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: ${COMPOSE_PROJECT_NAME}-backend:${IMAGE_TAG:-latest}
+  env_file:
+    - path: .env
+      required: false
+
+x-db-env: &db-env
+  POSTGRES_DB: ${DB_NAME:-db}
+  POSTGRES_USER: ${DB_USER:-postgres_user}
+  POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres_password}
+
+x-redis-env: &redis-env
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgres://${DB_USER:-postgres_user}:${DB_PASSWORD:-postgres_password}@db:5432/${DB_NAME:-db}
+  CELERY_BROKER_URL: redis://default:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+
+services:
+  backend:
+    <<: *backend-service
+    restart: always
+    environment:
+      <<: *backend-env
+    networks:
+      - backend
+      - frontend
+    expose:
+      - 8000
+    depends_on:
+      celery:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  migrate:
+    <<: *backend-service
+    command: python manage.py migrate --noinput
+    restart: no
+    profiles:
+      - init
+    environment:
+      <<: *backend-env
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+  celery:
+    <<: *backend-service
+    command: celery worker --loglevel INFO
+    restart: always
+    environment:
+      <<: *backend-env
+      CELERY_APP: project
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: celery inspect ping || exit 1
+      interval: 10s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+
+  db:
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      <<: *db-env
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: pg_isready -d "$${POSTGRES_DB}" -U "$${POSTGRES_USER}" || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8.6-alpine
+    command: sh -c 'exec redis-server --requirepass "$${REDIS_PASSWORD}"'
+    environment:
+      <<: *redis-env
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: redis-cli --pass "$${REDIS_PASSWORD}" ping | grep PONG
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  proxy:
+    image: nginx:1.29-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      - frontend
+    ports:
+      - ${LISTEN_PORT:-8080}:80
+    environment:
+      PROXY_HOST: backend
+      PROXY_PORT: 8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  redis-data:
+
+networks:
+  frontend:
+  backend:
