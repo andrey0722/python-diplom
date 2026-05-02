@@ -222,15 +222,14 @@ LOGGING = {
 }
 
 
-EMAIL_BACKEND = env.str(
-    'EMAIL_BACKEND',
-    'django.core.mail.backends.smtp.EmailBackend',
+# Email configuration
+# https://docs.djangoproject.com/en/6.0/ref/settings/#email-backend
+
+EMAIL_CONFIG = env.email(
+    'EMAIL_URL',
+    default='consolemail://',  # pyright: ignore[reportArgumentType]
 )
-EMAIL_HOST = env.str('EMAIL_HOST', 'smtp.example.com')
-EMAIL_PORT = env.int('EMAIL_PORT', 587)
-EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', True)
-EMAIL_HOST_USER = env.str('EMAIL_USERNAME', 'email_username')
-EMAIL_HOST_PASSWORD = env.str('EMAIL_PASSWORD', 'email_password')
+locals().update(EMAIL_CONFIG)
 
 
 REST_FRAMEWORK = {
