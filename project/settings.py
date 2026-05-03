@@ -240,6 +240,11 @@ EMAIL_CONFIG = env.email(
 )
 locals().update(EMAIL_CONFIG)
 
+DEFAULT_FROM_EMAIL = env.str(
+    'DEFAULT_FROM_EMAIL',
+    default='webmaster@localhost',
+)
+
 
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api.utils.exception_handler',

@@ -1,3 +1,6 @@
+x-email-env: &email-env
+  EMAIL_URL: ${EMAIL_URL:-smtp://smtp:1025}
+
 services:
   backend:
     volumes:
@@ -39,9 +42,13 @@ services:
     profiles: !reset []
 
   celery:
+    environment:
+      <<: *email-env
     depends_on:
       migrate:
         condition: service_completed_successfully
+      smtp:
+        condition: service_healthy
     develop:
       watch:
         - action: restart
@@ -61,6 +68,24 @@ services:
     ports:
       - 55432:5432
 
+  smtp:
+    image: axllent/mailpit:v1.29
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - mailpit-data:/data
+    networks:
+      - backend
+    ports:
+      - 8025:8025 # Web UI
+      - 1025:1025 # SMTP server
+    healthcheck:
+      test: /mailpit readyz
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   proxy:
     depends_on:
       collectstatic:
@@ -69,3 +94,6 @@ services:
       watch:
         - action: restart
           path: ./nginx.conf
+
+volumes:
+  mailpit-data:
