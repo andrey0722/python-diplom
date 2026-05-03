@@ -910,6 +910,9 @@ def update_shop_pricing_yaml(user: User, url: str, content: str):
         user (User): The shop owner.
         url (str): The pricing document URL.
         content (str): The YAML document.
+
+    Raises:
+        YAMLParsingError: If the YAML document cannot be parsed.
     """
     try:
         data = yaml.safe_load(content)
@@ -1070,8 +1073,6 @@ def edit_basket(user: User, items: list[dict[str, Any]]) -> None:
         user (User): The user updating their basket.
         items (list[dict[str, Any]]): Basket item payloads.
 
-    Raises:
-        BasketModifyError: If there's a database error during the operation.
     """
     basket = get_basket_for_update(user)
     order_items = locate_model_ids_dict(OrderItem, items, order=basket)

@@ -86,6 +86,16 @@ def _construct_url(
     view_name: str,
     **kwargs: object,
 ) -> str:
+    """Build an absolute URL for a named API view.
+
+    Args:
+        request (AnyRequest): The request used as the URL base.
+        view_name (str): URL name to reverse.
+        **kwargs (object): URL keyword arguments.
+
+    Returns:
+        str: Absolute URL for the resolved view.
+    """
     path = reverse(view_name, kwargs=kwargs)
     return request.build_absolute_uri(path)
 
@@ -223,6 +233,14 @@ def get_shop_context(
 
 
 def _prefetch_shops_with_items(order: Order) -> list[Shop]:
+    """Return shops with prefetched offers and items for an order.
+
+    Args:
+        order (Order): Order used to select matching shops and items.
+
+    Returns:
+        list[Shop]: Unique shops involved in the order.
+    """
     order_items = Prefetch(
         'order_items',
         queryset=OrderItem.objects.select_related(

@@ -613,8 +613,31 @@ def get_command_equivalent(  # noqa: C901, PLR0911, PLR0912
                     EXTRA_ARGS_PLACEHOLDER,
                 ]
             )
+        case 'up-clean':
+            return format_command_sequence(
+                [
+                    [*compose, 'down', '-v', '--remove-orphans'],
+                    [
+                        *compose,
+                        'up',
+                        '--build',
+                        *detach_args,
+                        EXTRA_ARGS_PLACEHOLDER,
+                    ],
+                ]
+            )
         case 'down':
             return format_command([*compose, 'down', EXTRA_ARGS_PLACEHOLDER])
+        case 'clean':
+            return format_command(
+                [
+                    *compose,
+                    'down',
+                    '-v',
+                    '--remove-orphans',
+                    EXTRA_ARGS_PLACEHOLDER,
+                ]
+            )
         case 'restart':
             return format_command_sequence(
                 [
@@ -729,6 +752,16 @@ def get_command_equivalent(  # noqa: C901, PLR0911, PLR0912
         case 'deploy':
             return format_command_sequence(
                 [
+                    [*compose, 'build'],
+                    [*compose, 'run', '--rm', 'migrate'],
+                    [*compose, 'run', '--rm', 'collectstatic'],
+                    [*compose, 'up', '-d', EXTRA_ARGS_PLACEHOLDER],
+                ]
+            )
+        case 'clean-deploy':
+            return format_command_sequence(
+                [
+                    [*compose, 'down', '-v', '--remove-orphans'],
                     [*compose, 'build'],
                     [*compose, 'run', '--rm', 'migrate'],
                     [*compose, 'run', '--rm', 'collectstatic'],

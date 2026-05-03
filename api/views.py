@@ -395,8 +395,6 @@ class ShopUpdateView(APIView):
         Returns:
             Response: Success message after updating shop data.
 
-        Raises:
-            ShopUrlLoadError: If the URL cannot be fetched or is invalid.
         """
         data = validate_request(self.serializer_class, request)
         url: str = data['url']
