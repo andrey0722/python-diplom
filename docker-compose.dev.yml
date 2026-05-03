@@ -9,6 +9,8 @@ services:
         condition: service_completed_successfully
       collectstatic:
         condition: service_completed_successfully
+      create_admin:
+        condition: service_completed_successfully
     develop:
       watch:
         - action: restart
@@ -28,6 +30,12 @@ services:
     profiles: !reset []
 
   collectstatic:
+    profiles: !reset []
+
+  create_admin:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     profiles: !reset []
 
   celery:

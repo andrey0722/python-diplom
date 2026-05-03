@@ -70,6 +70,24 @@ services:
     healthcheck:
       disable: true
 
+  create_admin:
+    <<: *backend-service
+    command: sh -c 'python manage.py createsuperuser --noinput || true'
+    restart: no
+    profiles:
+      - debug
+    environment:
+      <<: *backend-env
+      DJANGO_SUPERUSER_EMAIL: admin@example.com
+      DJANGO_SUPERUSER_PASSWORD: 123
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
   celery:
     <<: *backend-service
     command: celery worker --loglevel INFO
