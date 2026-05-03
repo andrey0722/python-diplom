@@ -1,9 +1,13 @@
 services:
   backend:
+    volumes:
+      - static-data:/project/static
     ports:
       - 8000:8000
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      collectstatic:
         condition: service_completed_successfully
     develop:
       watch:
@@ -21,6 +25,9 @@ services:
           path: Dockerfile
 
   migrate:
+    profiles: !reset []
+
+  collectstatic:
     profiles: !reset []
 
   celery:
@@ -47,6 +54,9 @@ services:
       - 55432:5432
 
   proxy:
+    depends_on:
+      collectstatic:
+        condition: service_completed_successfully
     develop:
       watch:
         - action: restart

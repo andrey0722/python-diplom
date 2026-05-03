@@ -306,3 +306,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = env.path(
+    'STATIC_ROOT',
+    default=BASE_DIR / STATIC_URL,  # pyright: ignore[reportArgumentType]
+)

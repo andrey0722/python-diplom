@@ -54,6 +54,22 @@ services:
     healthcheck:
       disable: true
 
+  collectstatic:
+    <<: *backend-service
+    command: python manage.py collectstatic --noinput --clear
+    restart: no
+    profiles:
+      - init
+    environment:
+      <<: *backend-env
+      STATIC_ROOT: /static
+    volumes:
+      - static-data:/static
+    networks:
+      - backend
+    healthcheck:
+      disable: true
+
   celery:
     <<: *backend-service
     command: celery worker --loglevel INFO
@@ -111,6 +127,7 @@ services:
     image: nginx:1.29-alpine
     volumes:
       - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - static-data:/static:ro
     networks:
       - frontend
     ports:
@@ -123,6 +140,7 @@ services:
         condition: service_healthy
 
 volumes:
+  static-data:
   db-data:
   redis-data:
 
