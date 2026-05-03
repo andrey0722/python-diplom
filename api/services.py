@@ -802,13 +802,13 @@ def debug_process_file_url[**P](
             path = path[1:]
 
         path = Path(path)
+        request = httpx.Request('GET', url, stream=httpx.SyncByteStream())
         try:
             content = path.read_bytes()
         except FileNotFoundError:
-            return httpx.Response(404, text='File not found')
+            return httpx.Response(404, text='File not found', request=request)
         except OSError as exc:
-            return httpx.Response(500, text=str(exc))
-        request = httpx.Request('GET', url, stream=httpx.SyncByteStream())
+            return httpx.Response(500, text=str(exc), request=request)
         return httpx.Response(
             200,
             content=content,

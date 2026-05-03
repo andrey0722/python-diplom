@@ -23,8 +23,15 @@ API_ROOT = f'{SERVER_ADDRESS}/api/v1'
 FAKER_LOCALE = 'ru_RU'
 FAKER_PHONE_TEMPLATE = '+79#########'
 APARTMENT_TEMPLATE = '%##'
+
 SHOP_DATA_DIR = Path(__file__).parent / 'shop_data'
 SHOP_DATA_NAME_REGEX = re.compile(r'shop([^.]+)\.ya?ml')
+SHOP_DATA_BASE_URL = (
+    'https://raw.githubusercontent.com/andrey0722/python-diplom/'
+    'refs/heads/main/shop_data/'
+)
+SHOP_DATA_FILE_SCHEME = False
+
 USER_COUNT = 3
 CONTACTS_COUNT = 10
 FILL_BASKET_SIZE = 10
@@ -673,7 +680,10 @@ def create_shop_template(
         company=f'Shop {name}',
         position=f'Shop {name} admin',
     )
-    shop_url = file.as_uri()
+    if SHOP_DATA_FILE_SCHEME:
+        shop_url = file.as_uri()
+    else:
+        shop_url = SHOP_DATA_BASE_URL + file.name
     return create_shop(session, shop, shop_url)
 
 
