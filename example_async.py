@@ -16,7 +16,7 @@ from typing import Any, ClassVar, Protocol, cast, override
 from faker import Faker
 import httpx
 
-SERVER_ADDRESS = 'http://127.0.0.1:8000'
+SERVER_ADDRESS = 'http://127.0.0.1:8080'
 USER_EMAIL = 'test_user@example.com'
 USER_PASSWORD = '123'
 

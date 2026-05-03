@@ -7,6 +7,7 @@ from django.db.models import OuterRef
 from django.db.models import Prefetch
 from django.db.models import QuerySet
 from django.http import HttpRequest
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.authentication import authenticate
@@ -262,7 +263,8 @@ class PasswordResetConfirmView(TokenConfirmView):
         """
         user = cast(User, data['user'])
         user.set_password(data['password'])
-        user.save(update_fields=['password'])
+        user.last_login = timezone.now()
+        user.save(update_fields=['password', 'last_login'])
         return Response(_('Password successfully reset.'))
 
 

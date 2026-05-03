@@ -137,6 +137,29 @@ def cmd_up_build(target: Target, args: Sequence[str]) -> int:
     return run(command)
 
 
+def cmd_up_clean(target: Target, args: Sequence[str]) -> int:
+    """Restart the target by running down, cleaning and up.
+
+    Args:
+        target (Target): Selected Compose target.
+        args (Sequence[str]): Extra Docker Compose arguments.
+
+    Returns:
+        int: Process exit code.
+    """
+    command = [*target.compose, 'up', '--build', *args]
+
+    if target.detached and '-d' not in args and '--detach' not in args:
+        command.append('-d')
+
+    return run_many(
+        [
+            [*target.compose, 'down', '-v', '--remove-orphans'],
+            command,
+        ]
+    )
+
+
 def cmd_down(target: Target, args: Sequence[str]) -> int:
     """Stop and remove containers for the target.
 
@@ -148,6 +171,19 @@ def cmd_down(target: Target, args: Sequence[str]) -> int:
         int: Process exit code.
     """
     return run([*target.compose, 'down', *args])
+
+
+def cmd_clean(target: Target, args: Sequence[str]) -> int:
+    """Stop and remove containers and all volumes for the target.
+
+    Args:
+        target (Target): Selected Compose target.
+        args (Sequence[str]): Extra Docker Compose arguments.
+
+    Returns:
+        int: Process exit code.
+    """
+    return run([*target.compose, 'down', '-v', '--remove-orphans', *args])
 
 
 def cmd_restart(target: Target, args: Sequence[str]) -> int:
@@ -384,6 +420,29 @@ def cmd_deploy(target: Target, args: Sequence[str]) -> int:
     )
 
 
+def cmd_clean_deploy(target: Target, args: Sequence[str]) -> int:
+    """Clean containers, volumes and run a minimal deployment sequence.
+
+    Args:
+        target (Target): Selected Compose target.
+        args (Sequence[str]): Extra Docker Compose arguments for `up`.
+
+    Returns:
+        int: First non-zero exit code or 0 when deployment succeeds.
+    """
+    up_command = [*target.compose, 'up', '-d', *args]
+
+    return run_many(
+        [
+            [*target.compose, 'down', '-v', '--remove-orphans'],
+            [*target.compose, 'build'],
+            [*target.compose, 'run', '--rm', 'migrate'],
+            [*target.compose, 'run', '--rm', 'collectstatic'],
+            up_command,
+        ]
+    )
+
+
 def cmd_dev_init(target: Target, args: Sequence[str]) -> int:  # noqa: ARG001
     """Initialize local development state.
 
@@ -416,7 +475,9 @@ COMMON_COMMANDS: Final[dict[str, CommandFunc]] = {
     'up': cmd_up,
     'build': cmd_build,
     'up-build': cmd_up_build,
+    'up-clean': cmd_up_clean,
     'down': cmd_down,
+    'clean': cmd_clean,
     'restart': cmd_restart,
     'logs': cmd_logs,
     'config': cmd_config,
@@ -457,6 +518,7 @@ TARGETS: Final[dict[str, Target]] = {
         detached=True,
         commands={
             'deploy': cmd_deploy,
+            'clean-deploy': cmd_clean_deploy,
             'check-deploy': cmd_check_deploy,
         },
     ),

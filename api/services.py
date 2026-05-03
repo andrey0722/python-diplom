@@ -369,8 +369,9 @@ def get_or_create_models_by_field[T: Model](
         if (key := model_dict_key(item, *key_fields)) not in existing_keys
     }
     missing = [build_model(cls, item) for item in missing_data.values()]
-    missing = cls.objects.bulk_create(missing)
-    return existing + missing
+    missing = cls.objects.bulk_create(missing, ignore_conflicts=True)
+    # Select all objects again in case there ware any conflicts
+    return list(cls.objects.select_for_update().filter(query))
 
 
 def make_model_field_dict[T: Model](
@@ -1039,7 +1040,7 @@ def add_to_basket(user: User, items: list[dict[str, Any]]) -> None:
             missing.append(order_item)
 
     if missing:
-        OrderItem.objects.bulk_create(missing)
+        OrderItem.objects.bulk_create(missing, ignore_conflicts=True)
 
     if existing:
         OrderItem.objects.bulk_update(existing, ['quantity'])
