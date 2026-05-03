@@ -33,7 +33,7 @@ SHOP_DATA_BASE_URL = (
 )
 SHOP_DATA_FILE_SCHEME = False
 
-USER_COUNT = 3
+USER_COUNT = 100
 CONTACTS_COUNT = 10
 FILL_BASKET_SIZE = 10
 
@@ -218,6 +218,8 @@ class UserData(DataclassBase):
         self.generate_field('last_name', person_gen.last_name)
         self.generate_field('position', person_gen.job)
 
+        self.company = self.company and self.company[:50]
+
 
 @dataclass
 class ContactData(DataclassBase):
@@ -282,17 +284,46 @@ def get_validation_error_codes(data: dict[str, Any], field: str) -> set[str]:
     return {error['code'] for error in errors}
 
 
-def validation_codes_equal(data: dict[str, Any], field: str, *codes: str):
+def validation_codes_equal(
+    data: dict[str, Any],
+    field: str,
+    *codes: str,
+) -> bool:
     """Compare expected validation codes against actual field errors.
 
     Args:
         data (dict[str, Any]): The error response payload.
         field (str): The field to inspect for errors.
         *codes (str): Expected validation error codes.
+
+    Returns:
+        bool: True when the field errors match the expected codes.
     """
     expected_codes = set(codes)
     found_codes = get_validation_error_codes(data, field)
     return found_codes == expected_codes
+
+
+def test_error(
+    response: httpx.Response,
+    status_code: int,
+    expected_code: str,
+) -> bool:
+    """Return whether a response contains the expected API error.
+
+    Args:
+        response (httpx.Response): Response returned by the API.
+        status_code (int): Expected HTTP status code.
+        expected_code (str): Expected application error code.
+
+    Returns:
+        bool: True when both status and error code match.
+    """
+    if response.status_code == status_code:
+        json: dict[str, Any] = response.json()
+        if json['code'] == expected_code:
+            return True
+    return False
 
 
 def fail_if_error(response: httpx.Response) -> None:
@@ -569,7 +600,7 @@ async def place_order(
     user_token: str,
     order_id: object,
     contact_id: object,
-) -> OrderData:
+) -> OrderData | None:
     """Place an order from the user's current basket.
 
     Args:
@@ -579,14 +610,21 @@ async def place_order(
         contact_id (object): Contact ID for the order.
 
     Returns:
-        OrderData: Placed order response payload.
+        OrderData | None: Order response payload if placed. If not enough
+            stocks for this basket, then return None.
     """
     data = {'id': order_id, 'contact': contact_id}
     headers = auth_header(user_token)
     response = await session.post(
         f'{API_ROOT}/order', data=data, headers=headers
     )
-    fail_if_error(response)
+
+    if not response.is_success:
+        if test_error(response, httpx.codes.CONFLICT, 'basket_checkout_error'):
+            # Most likely insufficient stocks => try again later
+            return None
+        fail_if_error(response)
+
     return response.json()
 
 
@@ -706,7 +744,9 @@ async def create_shop_template(
         shop_url = file.as_uri()
     else:
         shop_url = SHOP_DATA_BASE_URL + file.name
-    return await create_shop(session, shop, shop_url)
+    token = await create_shop(session, shop, shop_url)
+    await create_default_contacts(session, token)
+    return token
 
 
 async def create_default_shops(session: httpx.AsyncClient) -> list[str]:
@@ -760,6 +800,15 @@ async def create_user_with_contacts(
     session: httpx.AsyncClient,
     user: UserData,
 ) -> str:
+    """Create a user and its default contacts.
+
+    Args:
+        session (httpx.AsyncClient): HTTP client to use for requests.
+        user (UserData): User payload to register.
+
+    Returns:
+        str: API token for the created user.
+    """
     token = await create_user(session, user)
     await create_default_contacts(session, token)
     return token
@@ -878,37 +927,60 @@ def select_contact(contacts: Contacts) -> object:
     return contact['id']
 
 
-async def create_all(session: httpx.AsyncClient, test_user: UserData):
+async def create_all(
+    session: httpx.AsyncClient,
+    test_user: UserData,
+) -> list[str]:
     """Create default shops and users for end-to-end tests.
 
     Args:
         session (httpx.AsyncClient): HTTP client to use for requests.
         test_user (UserData): Primary test user data.
+
+    Returns:
+        list[str]: API tokens for all created accounts.
     """
     async with asyncio.TaskGroup() as tg:
-        tg.create_task(create_default_shops(session))
-        tg.create_task(create_default_users(session, test_user))
+        shops_task = tg.create_task(create_default_shops(session))
+        users_task = tg.create_task(create_default_users(session, test_user))
+    return shops_task.result() + users_task.result()
 
 
-async def make_order(session: httpx.AsyncClient, test_user: UserData):
+async def make_order(session: httpx.AsyncClient, token: str) -> None:
     """Simulate a full order flow for a test user.
 
     Args:
         session (httpx.AsyncClient): HTTP client to use for requests.
-        test_user (UserData): User data for the order flow.
+        token (str): API authentication token.
     """
-    token = await login(session, test_user)
     contacts = await get_contacts(session, token)
 
-    await empty_basket(session, token)
-    basket = await fill_basket(session, token)
-    order = await place_order(
-        session, token, basket['id'], select_contact(contacts)
-    )
+    # Try to find a suitable basket because other users could
+    # already checkout theirs baskets and reduce stocks.
+    order = None
+    while order is None:
+        await empty_basket(session, token)
+        basket = await fill_basket(session, token)
+        order = await place_order(
+            session, token, basket['id'], select_contact(contacts)
+        )
+
     await cancel_order(session, token, order['id'])
     order = await place_order(
         session, token, order['id'], select_contact(contacts)
     )
+
+
+async def make_orders(session: httpx.AsyncClient, tokens: list[str]) -> None:
+    """Create and cancel orders for all provided users.
+
+    Args:
+        session (httpx.AsyncClient): HTTP client to use for requests.
+        tokens (list[str]): API tokens for users that place orders.
+    """
+    async with asyncio.TaskGroup() as tg:
+        for token in tokens:
+            tg.create_task(make_order(session, token))
 
 
 class SessionWrapper(httpx.AsyncClient):
@@ -935,6 +1007,8 @@ class SessionWrapper(httpx.AsyncClient):
         fail_count = 0
         while True:
             try:
+                # Add a random delay to shuffle the requests a bit
+                await asyncio.sleep(random.uniform(0.15, 0.6))
                 response = await super().request(*args, **kwargs)
             except httpx.RequestError:
                 fail_count += 1
@@ -948,8 +1022,8 @@ async def main():
     """Run the example script to create users, shops, and place an order."""
     async with SessionWrapper() as session:
         test_user = UserData(email=USER_EMAIL, password=USER_PASSWORD)
-        await create_all(session, test_user)
-        await make_order(session, test_user)
+        tokens = await create_all(session, test_user)
+        await make_orders(session, tokens)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,8 @@
+from collections.abc import Callable
 import functools
-from typing import TYPE_CHECKING, Final, override
+import random
+import time
+from typing import TYPE_CHECKING, Any, Final, override
 
 from django.contrib import admin
 from django.contrib.auth.models import AbstractBaseUser
@@ -7,6 +10,7 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.models import UserManager as BaseUserManager
 from django.core.exceptions import ValidationError
+from django.db import DatabaseError
 from django.db import models
 from django.db.models import ExpressionWrapper
 from django.db.models import F
@@ -17,6 +21,8 @@ from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 from model_utils.managers import QueryManager
 from phonenumber_field.modelfields import PhoneNumberField
+from psycopg2.errorcodes import DEADLOCK_DETECTED
+from psycopg2.errorcodes import SERIALIZATION_FAILURE
 from rest_framework.authtoken.models import Token as BaseToken
 
 if TYPE_CHECKING:
@@ -40,6 +46,53 @@ def unique_ignore_case(model: type[models.Model] | str, *fields: str):
         *map(Lower, fields),
         name=f'uq_{model.lower()}_lower_{"_".join(fields)}',
     )
+
+
+def get_psycopg_error(exc: BaseException) -> str | None:
+    """Return the PostgreSQL error code from an exception cause."""
+    cause = exc.__cause__
+    return getattr(cause, 'sqlstate', None) or getattr(cause, 'pgcode', None)
+
+
+def is_retryable_db_error(exc: DatabaseError) -> bool:
+    """Return whether a database error can be retried safely."""
+    return get_psycopg_error(exc) in {DEADLOCK_DETECTED, SERIALIZATION_FAILURE}
+
+
+def retry_transaction[**P, T](func: Callable[P, T]) -> Callable[P, T]:
+    """Retry a database operation after retryable PostgreSQL failures.
+
+    Args:
+        func (Callable[P, T]): Function to execute with retries.
+
+    Returns:
+        Callable[P, T]: Wrapped function with retry handling.
+    """
+    retries = 10
+
+    @functools.wraps
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        """Run the wrapped function until success or a non-retryable error.
+
+        Args:
+            *args (Any): Positional arguments for the wrapped function.
+            **kwargs (Any): Keyword arguments for the wrapped function.
+
+        Returns:
+            T: The wrapped function result.
+        """
+        fail_count = 0
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except DatabaseError as e:
+                fail_count += 1
+                if not is_retryable_db_error(e) or fail_count >= retries:
+                    raise
+                # Wait a bit before retry
+                time.sleep(random.uniform(0.05, 0.2))
+
+    return wrapper
 
 
 DUMMY_USERNAME = '_'

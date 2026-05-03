@@ -266,10 +266,13 @@ WSGI_APPLICATION = 'project.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db(
-        'DATABASE_URL',
-        default='sqlite:///db.sqlite3',  # type: ignore[reportArgumentType]
-    ),
+    'default': {
+        **env.db(
+            'DATABASE_URL',
+            default='sqlite:///db.sqlite3',  # type: ignore[reportArgumentType]
+        ),
+        'CONN_MAX_AGE': 0,
+    }
 }
 
 AUTH_USER_MODEL = 'api.User'

@@ -16,6 +16,7 @@ from .models import Order
 from .models import OrderItem
 from .models import OrderState
 from .models import User
+from .models import retry_transaction
 from .templates import OrderContext
 from .templates import VerifyContext
 from .templates import get_order_user_context
@@ -59,6 +60,7 @@ def send_password_reset_mail(
 
 
 @shared_task_wrapper
+@retry_transaction
 @transaction.atomic
 def notify_order_state(
     order_id: object,

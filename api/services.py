@@ -56,6 +56,7 @@ from .models import ProductParameter
 from .models import Shop
 from .models import ShopOffer
 from .models import User
+from .models import retry_transaction
 from .serializers import EmailConfirmSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import ShopPricingSerializer
@@ -253,7 +254,7 @@ def get_and_lock_model[T: Model](cls: type[T], **kwargs: object) -> T:
         T: The locked model instance.
     """
     kwargs = filter_by_fields(cls, kwargs)
-    return cls.objects.select_for_update().get(**kwargs)
+    return cls.objects.select_for_update().order_by('id').get(**kwargs)
 
 
 def lock_model_instance(instance: Model) -> None:
@@ -263,7 +264,9 @@ def lock_model_instance(instance: Model) -> None:
         instance (Model): The model instance to lock.
     """
     cls = instance._meta.model  # noqa: SLF001
-    cls.objects.select_for_update().only('pk').get(pk=instance.pk)
+    cls.objects.select_for_update().only('pk').order_by('id').get(
+        pk=instance.pk
+    )
 
 
 type ModelKey[T] = T | tuple[T, ...]
@@ -359,7 +362,9 @@ def get_or_create_models_by_field[T: Model](
         # WHERE id IN ()
         query = Q(pk__in={})
 
-    existing = list(cls.objects.select_for_update().filter(query))
+    existing = list(
+        cls.objects.select_for_update().filter(query).order_by('id')
+    )
     existing_keys = {model_object_key(obj, *key_fields) for obj in existing}
 
     # Exclude duplicate keys
@@ -371,7 +376,7 @@ def get_or_create_models_by_field[T: Model](
     missing = [build_model(cls, item) for item in missing_data.values()]
     missing = cls.objects.bulk_create(missing, ignore_conflicts=True)
     # Select all objects again in case there ware any conflicts
-    return list(cls.objects.select_for_update().filter(query))
+    return list(cls.objects.select_for_update().filter(query).order_by('id'))
 
 
 def make_model_field_dict[T: Model](
@@ -456,6 +461,7 @@ def locate_model_ids[T: Model](
     existing = set(
         cls.objects.select_for_update()
         .filter(**lookup)
+        .order_by('id')
         .values_list(_model_id_field, flat=True)
     )
     if missing := all_ids - existing:
@@ -494,7 +500,9 @@ def locate_model_ids_dict[T: Model](
     kwargs = filter_by_fields(cls, kwargs)
     lookup = {f'{_model_id_field}__in': all_ids} | kwargs
 
-    existing = list(cls.objects.select_for_update().filter(**lookup))
+    existing = list(
+        cls.objects.select_for_update().filter(**lookup).order_by('id')
+    )
     existing_ids = {model_object_key(obj, _model_id_field) for obj in existing}
 
     if missing_ids := all_ids - existing_ids:
@@ -583,7 +591,7 @@ def get_or_create_model[T: Model](
     kwargs = filter_by_fields(cls, kwargs)
     queryset = cls.objects
     if _lock:
-        queryset = queryset.select_for_update()
+        queryset = queryset.select_for_update().order_by('id')
     item, created = queryset.get_or_create(defaults=defaults, **kwargs)
     if created and _lock:
         lock_model_instance(item)
@@ -929,6 +937,7 @@ def make_category_dict(
     return {item['id']: categories[item['name']] for item in data}
 
 
+@retry_transaction
 @transaction.atomic
 def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
     """Apply shop pricing from processed input data.
@@ -1001,6 +1010,7 @@ def get_basket_for_update(user: User) -> Basket:
     )
 
 
+@retry_transaction
 @transaction.atomic
 def add_to_basket(user: User, items: list[dict[str, Any]]) -> None:
     """Add items to the user's shopping basket from request data.
@@ -1024,7 +1034,9 @@ def add_to_basket(user: User, items: list[dict[str, Any]]) -> None:
         offer_quantity[offer_id] += quantity
 
     query = Q(order=basket, shop_offer_id__in=offer_ids)
-    existing = list(OrderItem.objects.select_for_update().filter(query))
+    existing = list(
+        OrderItem.objects.select_for_update().order_by('id').filter(query)
+    )
     order_items = {item.shop_offer_id: item for item in existing}
 
     missing: list[OrderItem] = []
@@ -1046,6 +1058,7 @@ def add_to_basket(user: User, items: list[dict[str, Any]]) -> None:
         OrderItem.objects.bulk_update(existing, ['quantity'])
 
 
+@retry_transaction
 @transaction.atomic
 def edit_basket(user: User, items: list[dict[str, Any]]) -> None:
     """Update quantities of items in the user's shopping basket.
@@ -1102,7 +1115,7 @@ def _lock_order_items(order: Order) -> OrderData:
         OrderData: Locked order, items, and shop offers.
     """
     # Lock the parent order object
-    order = Order.objects.select_for_update().get(pk=order.pk)
+    order = Order.objects.select_for_update().order_by('id').get(pk=order.pk)
     items = list(OrderItem.objects.filter(order_id=order.pk))
 
     # Lock all the shop offers
@@ -1113,6 +1126,7 @@ def _lock_order_items(order: Order) -> OrderData:
             ShopOffer.objects.select_for_update()
             .select_related('shop')
             .filter(pk__in=offer_ids)
+            .order_by('id')
         )
     }
     return OrderData(order, items, offers)
@@ -1193,6 +1207,7 @@ def _replenish_stock(items: OrderItems, offers: ShopOfferDict) -> None:
     ShopOffer.objects.bulk_update(update_offers, ['quantity'])
 
 
+@retry_transaction
 @transaction.atomic
 def checkout_basket(
     basket: Order,
@@ -1241,6 +1256,7 @@ def checkout_basket(
     return order
 
 
+@retry_transaction
 @transaction.atomic
 def change_order_state(
     order: Order,
@@ -1274,6 +1290,7 @@ def change_order_state(
     if new_state == OrderState.CANCELLED:
         _replenish_stock(items, offers)
     elif new_state == OrderState.NEW and old_state == OrderState.CANCELLED:
+        _validate_basket_items(items, offers)
         _reserve_stock(items, offers)
 
     order.state = new_state
