@@ -70,7 +70,7 @@ def retry_transaction[**P, T](func: Callable[P, T]) -> Callable[P, T]:
     """
     retries = 10
 
-    @functools.wraps
+    @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> T:
         """Run the wrapped function until success or a non-retryable error.
 
