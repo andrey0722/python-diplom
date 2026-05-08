@@ -624,7 +624,7 @@ class TokenGenerator(PasswordResetTokenGenerator):
             timestamp (int): The token timestamp.
 
         Returns:
-            A hash string used for token validation.
+            str: Hash string used for token validation.
         """
         result = super()._make_hash_value(user, timestamp)
         return f'{result}{user.is_active}'

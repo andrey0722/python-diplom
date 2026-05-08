@@ -48,6 +48,8 @@ INSTALLED_APPS = [
     # Auxilary apps
     'admin_extra_buttons',
     'django_filters',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     'phonenumber_field',
     'rest_framework',
     # Project apps
@@ -248,15 +250,23 @@ DEFAULT_FROM_EMAIL = env.str(
 
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api.utils.exception_handler',
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'api.authentication.TokenAuthentication',
-    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': (),
     'DEFAULT_PAGINATION_CLASS': (
         'rest_framework.pagination.LimitOffsetPagination'
     ),
     'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'api.schema.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Backend service for purchase automation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
 }
 
 WSGI_APPLICATION = 'project.wsgi.application'

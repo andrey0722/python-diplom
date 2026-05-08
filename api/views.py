@@ -9,15 +9,20 @@ from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema_view
 from rest_framework import status
 from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import NotAuthenticated
+from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import CreateAPIView
-from rest_framework.generics import DestroyAPIView
 from rest_framework.generics import GenericAPIView
 from rest_framework.generics import ListAPIView
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.generics import RetrieveAPIView
+from rest_framework.generics import RetrieveDestroyAPIView
 from rest_framework.generics import UpdateAPIView
 from rest_framework.mixins import UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
@@ -26,14 +31,22 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
+from .authentication import TokenAuthentication
+from .exceptions import BasketCheckoutError
+from .exceptions import InvalidCredentialsError
+from .exceptions import InvalidOrderStateTransitionError
+from .exceptions import LoginInactiveError
+from .exceptions import MissingIdsError
 from .exceptions import TokenConfirmError
+from .exceptions import WebRequestConnectError
+from .exceptions import WebRequestResponseStatusError
+from .exceptions import YAMLParsingError
 from .filters import CategoryFilter
 from .filters import ShopFilter
 from .filters import ShopOfferFilter
 from .mixins import FilterByIdsListMixin
 from .mixins import GetObjectByAuthUserMixin
 from .mixins import GetQuerySetByAuthUserMixin
-from .mixins import ListRetrieveModelMixin
 from .models import Basket
 from .models import Category
 from .models import Contact
@@ -46,6 +59,10 @@ from .models import ShopOffer
 from .models import Token
 from .models import User
 from .permissions import UserOwnsShop
+from .schema import data_response_dict
+from .schema import error_response_dict
+from .schema import message_response_dict
+from .schema import validation_response_dict
 from .serializers import AddToBasketSerializer
 from .serializers import CategorySerializer
 from .serializers import ContactSerializer
@@ -53,6 +70,7 @@ from .serializers import EditBasketSerializer
 from .serializers import EmailConfirmSerializer
 from .serializers import FilteredOrderSerializer
 from .serializers import IdSerializer
+from .serializers import ItemsSerializer
 from .serializers import OrderSerializer
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import PlaceOrderSerializer
@@ -82,6 +100,10 @@ from .services import verify_user_email
 logger = logging.getLogger(__name__)
 
 
+@extend_schema(
+    description=_('Request a verification email message.'),
+    responses=message_response_dict(_('Verification is sent if needed.')),
+)
 class SendVerificationView(GenericAPIView):
     """View for sending verification emails."""
 
@@ -127,6 +149,13 @@ class SendVerificationView(GenericAPIView):
         return Response(data)
 
 
+@extend_schema(
+    description=_('Confirm a user token and perform required action.'),
+    responses={
+        **message_response_dict(_('Token confirmed.')),
+        **error_response_dict(TokenConfirmError),
+    },
+)
 class TokenConfirmView(GenericAPIView):
     """Base view for validating user confirmation tokens."""
 
@@ -146,7 +175,7 @@ class TokenConfirmView(GenericAPIView):
             token (str | None): The token string to validate.
 
         Returns:
-            True if the token is valid, False otherwise.
+            bool: True if the token is valid, False otherwise.
         """
         raise NotImplementedError
 
@@ -191,6 +220,22 @@ class TokenConfirmView(GenericAPIView):
         return Response(_('Token confirmed.'))
 
 
+@extend_schema(
+    description=_(
+        'Register a new user and send an email verification message.'
+    ),
+    responses={
+        **data_response_dict(
+            serializer=UserSerializer,
+            status_code=status.HTTP_201_CREATED,
+        ),
+        **validation_response_dict(
+            field='email',
+            code='unique',
+            message=_('User with this email address already exists.'),
+        ),
+    },
+)
 class UserRegisterView(CreateAPIView):
     """View for user registration."""
 
@@ -207,6 +252,9 @@ class UserRegisterView(CreateAPIView):
         verify_user_email(self.request, user)
 
 
+@extend_schema(
+    description=_('Request an email verification to activate account.'),
+)
 class SendEmailVerificationView(SendVerificationView):
     """View for sending email verification emails."""
 
@@ -215,6 +263,11 @@ class SendEmailVerificationView(SendVerificationView):
     send_mail = staticmethod(verify_user_email)
 
 
+@extend_schema(
+    description=_(
+        'Confirm the email verification token and activate the account.'
+    ),
+)
 class EmailConfirmView(TokenConfirmView):
     """View for confirming email with token."""
 
@@ -237,6 +290,9 @@ class EmailConfirmView(TokenConfirmView):
         return Response(_('Email successfully verified.'))
 
 
+@extend_schema(
+    description=_('Request a password reset email for an active account.'),
+)
 class SendPasswordResetView(SendVerificationView):
     """View for sending password reset emails."""
 
@@ -245,6 +301,9 @@ class SendPasswordResetView(SendVerificationView):
     send_mail = staticmethod(reset_user_password)
 
 
+@extend_schema(
+    description=_('Confirm the password reset token and set a new password.'),
+)
 class PasswordResetConfirmView(TokenConfirmView):
     """View for confirming password reset with token."""
 
@@ -268,6 +327,13 @@ class PasswordResetConfirmView(TokenConfirmView):
         return Response(_('Password successfully reset.'))
 
 
+@extend_schema(
+    description=_('Enter user credentials and acquire a new API token.'),
+    responses={
+        **data_response_dict(TokenSerializer),
+        **error_response_dict(InvalidCredentialsError, LoginInactiveError),
+    },
+)
 class UserLoginView(APIView):
     """View for user authentication and creating login tokens."""
 
@@ -286,9 +352,9 @@ class UserLoginView(APIView):
 
         user = authenticate(cast(HttpRequest, request), **credentials)
         if user is None:
-            raise AuthenticationFailed(_('Invalid email or password.'))
+            raise InvalidCredentialsError
         if not user.is_active:
-            raise AuthenticationFailed(_('User inactive or deleted.'))
+            raise LoginInactiveError
 
         token = Token.objects.create(user=user)
         # Update last_login
@@ -298,10 +364,18 @@ class UserLoginView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema(
+    description=_('Get the current user profile info.'),
+    responses={
+        **data_response_dict(UserSerializer),
+        **error_response_dict(AuthenticationFailed, NotAuthenticated),
+    },
+)
 class UserInfoView(RetrieveAPIView, UpdateModelMixin):
     """View for user personal info management."""
 
     serializer_class = UserSerializer
+    authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     @override
@@ -315,6 +389,7 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
         self.check_object_permissions(self.request, obj)
         return obj
 
+    @extend_schema(description=_('Edit the current user profile info.'))
     def post(self, request: Request) -> Response:
         """Update user personal information.
 
@@ -327,6 +402,31 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
         return self.partial_update(request)
 
 
+@extend_schema(
+    responses={
+        **data_response_dict(ContactSerializer),
+        **error_response_dict(AuthenticationFailed, NotAuthenticated),
+    },
+)
+@extend_schema_view(
+    get=extend_schema(description=_('List contacts of the current user.')),
+    post=extend_schema(
+        description=_('Create a new contact for the current user.'),
+        responses={
+            **data_response_dict(
+                serializer=ContactSerializer,
+                status_code=status.HTTP_201_CREATED,
+            ),
+            **error_response_dict(AuthenticationFailed, NotAuthenticated),
+        },
+    ),
+    put=extend_schema(
+        description=_('Replace a contact selected by ID in the request body.'),
+    ),
+    patch=extend_schema(
+        description=_('Edit a contact selected by ID in the request body.'),
+    ),
+)
 class UserContactsView(
     GetQuerySetByAuthUserMixin,
     FilterByIdsListMixin,
@@ -337,6 +437,7 @@ class UserContactsView(
 
     queryset = Contact.objects
     serializer_class = ContactSerializer
+    authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     @override
@@ -358,6 +459,18 @@ class UserContactsView(
         """
         serializer.save(user=self.request.user)
 
+    @extend_schema(
+        description=_('Delete selected contacts of the current user.'),
+        request=ItemsSerializer,
+        responses={
+            status.HTTP_204_NO_CONTENT: None,
+            **error_response_dict(
+                MissingIdsError,
+                AuthenticationFailed,
+                NotAuthenticated,
+            ),
+        },
+    )
     def delete(self, request: Request) -> Response:  # noqa: ARG002
         """Delete selected contacts by ID list from request.
 
@@ -380,10 +493,24 @@ class UserContactsView(
         return data['id']
 
 
+@extend_schema(
+    description=_('Load a shop price list from URL and update shop data.'),
+    responses={
+        **message_response_dict(_('Shop data updated.')),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            YAMLParsingError,
+            WebRequestConnectError,
+            WebRequestResponseStatusError,
+        ),
+    },
+)
 class ShopUpdateView(APIView):
     """View for updating a shop's pricing catalog from a provided URL."""
 
     serializer_class = ShopUpdateURLSerializer
+    authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     def post(self, request: Request) -> Response:
@@ -415,6 +542,17 @@ class ShopUpdateView(APIView):
         return response.text
 
 
+@extend_schema(
+    description=_('Return the current user shop state.'),
+    responses={
+        **data_response_dict(ShopSerializer),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            PermissionDenied,
+        ),
+    },
+)
 class ShopStateView(
     GetObjectByAuthUserMixin,
     RetrieveAPIView,
@@ -424,8 +562,10 @@ class ShopStateView(
 
     queryset = Shop.objects
     serializer_class = ShopSerializer
+    authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated, UserOwnsShop)
 
+    @extend_schema(description=_('Modify shop active state for current user.'))
     def post(self, request, *args, **kwargs):
         """Update the shop active state.
 
@@ -440,11 +580,12 @@ class ShopStateView(
         return self.partial_update(request, *args, **kwargs)
 
 
-class ShopOrdersView(ListRetrieveModelMixin):
-    """View for shop owners to inspect orders containing their items."""
+class BaseShopOrderView(GenericAPIView):
+    """Base view for placed orders with items from certain shops."""
 
     queryset = PlacedOrder.objects
     serializer_class = FilteredOrderSerializer
+    authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated, UserOwnsShop)
 
     @override
@@ -473,6 +614,41 @@ class ShopOrdersView(ListRetrieveModelMixin):
         )
 
 
+@extend_schema(
+    description=_("List orders with products from the current user's shop."),
+    responses={
+        **data_response_dict(FilteredOrderSerializer),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            PermissionDenied,
+        ),
+    },
+)
+class ShopOrdersListView(BaseShopOrderView, ListAPIView):
+    """List all placed orders containing items from the user's shop."""
+
+
+@extend_schema(
+    description=_("Get an order with products from the current user's shop."),
+    responses={
+        **data_response_dict(FilteredOrderSerializer),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            PermissionDenied,
+            NotFound(_('No orders matching this id.')),
+        ),
+    },
+)
+class ShopOrderView(BaseShopOrderView, RetrieveAPIView):
+    """Show a placed order containing items from the user's shop."""
+
+
+@extend_schema(
+    description=_('List active shops with optional filtering.'),
+    responses=data_response_dict(ShopSerializer),
+)
 class ShopListView(ListAPIView):
     """List view for shops with optional name filtering."""
 
@@ -481,6 +657,10 @@ class ShopListView(ListAPIView):
     filterset_class = ShopFilter
 
 
+@extend_schema(
+    description=_('List product categories with optional filtering.'),
+    responses=data_response_dict(CategorySerializer),
+)
 class CategoryListView(ListAPIView):
     """List view for product categories with optional name filtering."""
 
@@ -489,6 +669,10 @@ class CategoryListView(ListAPIView):
     filterset_class = CategoryFilter
 
 
+@extend_schema(
+    description=_('List shop offers with optional filters.'),
+    responses=data_response_dict(ShopOfferSerializer),
+)
 class ShopOfferListView(ListAPIView):
     """List view for shop offers with optional shop and category filtering."""
 
@@ -499,6 +683,19 @@ class ShopOfferListView(ListAPIView):
     filterset_class = ShopOfferFilter
 
 
+@extend_schema_view(
+    get=extend_schema(
+        description=_('Return the current user basket.'),
+        responses={
+            **data_response_dict(OrderSerializer),
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                NotFound(_('Basket for this user does not exist yet.')),
+            ),
+        },
+    ),
+)
 class BasketView(
     GetObjectByAuthUserMixin,
     FilterByIdsListMixin,
@@ -508,10 +705,22 @@ class BasketView(
 
     queryset = Basket.objects.prefetch_related('items')
     serializer_class = OrderSerializer
+    authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     items_queryset = OrderItem.objects.filter(order__state=OrderState.BASKET)
 
+    @extend_schema(
+        description=_('Add items to the current user basket.'),
+        responses={
+            **data_response_dict(OrderSerializer),
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                MissingIdsError,
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         """Add items to the user's basket.
 
@@ -525,6 +734,17 @@ class BasketView(
         add_to_basket(request.user, data['items'])
         return self.get(request)
 
+    @extend_schema(
+        description=_('Update item quantities in the current user basket.'),
+        responses={
+            **data_response_dict(OrderSerializer),
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                MissingIdsError,
+            ),
+        },
+    )
     def put(self, request: Request) -> Response:
         """Update quantities of items in the user's basket.
 
@@ -538,6 +758,18 @@ class BasketView(
         edit_basket(request.user, data['items'])
         return self.get(request)
 
+    @extend_schema(
+        description=_('Delete selected items from the current user basket.'),
+        request=ItemsSerializer,
+        responses={
+            status.HTTP_204_NO_CONTENT: None,
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                MissingIdsError,
+            ),
+        },
+    )
     def delete(self, request: Request) -> Response:  # noqa: ARG002
         """Delete specified items from the user's basket.
 
@@ -554,17 +786,39 @@ class BasketView(
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class UserOrderView(
-    GetQuerySetByAuthUserMixin,
-    ListRetrieveModelMixin,
-    DestroyAPIView,
-):
-    """View for managing user orders and placing new orders."""
+class BaseUserOrdersView(GetQuerySetByAuthUserMixin):
+    """Base view for placed orders for a user."""
 
     queryset = PlacedOrder.objects
     serializer_class = OrderSerializer
+    authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
 
+
+@extend_schema_view(
+    get=extend_schema(
+        description=_('List orders placed by the current user.'),
+        responses={
+            **data_response_dict(OrderSerializer),
+            **error_response_dict(AuthenticationFailed, NotAuthenticated),
+        },
+    )
+)
+class UserOrdersListView(BaseUserOrdersView, ListAPIView):
+    """List orders placed by user and place new orders."""
+
+    @extend_schema(
+        description=_('Checkout the basket or reopen a canceled order.'),
+        responses={
+            **data_response_dict(OrderSerializer),
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                BasketCheckoutError,
+                InvalidOrderStateTransitionError,
+            ),
+        },
+    )
     def post(self, request: Request) -> Response:
         """Create an order from user's basket or reopen inactive order.
 
@@ -582,6 +836,34 @@ class UserOrderView(
         else:
             change_order_state(order, OrderState.NEW, contact, request)
         return self.get(request, order.pk)
+
+
+@extend_schema_view(
+    get=extend_schema(
+        description=_('Get an order placed by the current user.'),
+        responses={
+            **data_response_dict(OrderSerializer),
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                NotFound(_('Order not found.')),
+            ),
+        },
+    ),
+    delete=extend_schema(
+        description=_('Cancel the selected order.'),
+        responses={
+            status.HTTP_204_NO_CONTENT: None,
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                NotFound(_('Order not found.')),
+            ),
+        },
+    ),
+)
+class UserOrderView(BaseUserOrdersView, RetrieveDestroyAPIView):
+    """Retrieve or cancel a placed order by a user."""
 
     @override
     def perform_destroy(self, instance: PlacedOrder) -> None:

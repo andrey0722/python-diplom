@@ -3,9 +3,6 @@ from typing import Never, NoReturn, override
 from django.db.models import QuerySet
 from rest_framework.generics import GenericAPIView
 from rest_framework.generics import get_object_or_404
-from rest_framework.mixins import ListModelMixin
-from rest_framework.mixins import RetrieveModelMixin
-from rest_framework.request import Request
 
 from .exceptions import MissingIdsError
 from .serializers import ItemsSerializer
@@ -89,26 +86,3 @@ class FilterByIdsListMixin(GenericAPIView):
         """
         data = validate_view(ItemsSerializer, self)
         return set(data['items'])
-
-
-class ListRetrieveModelMixin(
-    ListModelMixin,
-    RetrieveModelMixin,
-    GenericAPIView,
-):
-    """Mixin that routes GET requests to list or detail responses."""
-
-    def get(self, request: Request, pk: object = None):
-        """Return a detail response when `pk` is present, else a list.
-
-        Args:
-            request (Request): The current request.
-            pk (object): Optional primary key for detail retrieval.
-
-        Returns:
-            Response: List or detail response for the request.
-        """
-        if pk is not None:
-            self.kwargs['pk'] = pk
-            return self.retrieve(request)
-        return self.list(request)

@@ -25,6 +25,7 @@ Backend-приложение на Django REST Framework для автомати�
 - Redis в качестве брокера Celery;
 - Celery для фоновой отправки email;
 - django-filter, django-environ, django-admin-extra-buttons;
+- drf-spectacular для OpenAPI-схемы, Swagger UI и ReDoc;
 - Mailpit в dev-окружении для просмотра отправляемых писем и отладки;
 - Uvicorn ASGI server и Nginx reverse proxy.
 
@@ -34,6 +35,7 @@ Backend-приложение на Django REST Framework для автомати�
 api/                    Основное приложение: модели, API views, serializers, services, admin, Celery tasks
 api/templates/api/       TXT/HTML email-шаблоны
 api/management/commands/ Команда manage.py celery для dev-worker с autoreload
+api/schema.py            OpenAPI-настройки и helper-функции для схемы ответов
 project/                Настройки Django, URLconf, ASGI/WSGI, Celery app, health-check
 shop_data/              Примеры YAML-прайсов и некорректные файлы для проверки валидации
 compose.py              Обертка над Docker Compose командами для dev/prod окружений
@@ -294,6 +296,21 @@ Authorization: Token <token>
 
 Для фактической реализации приведённая выше Postman Collection была дополнена:
 [netology-pd-diplom-new](https://documenter.getpostman.com/view/46171784/2sBXqKp16P)
+
+В проект встроена актуальная OpenAPI-документация:
+
+| URL | Назначение |
+| --- | --- |
+| `/api/v1/schema/` | OpenAPI-схема в машинно-читаемом формате. |
+| `/api/v1/schema/swagger-ui/` | Swagger UI для интерактивного просмотра и ручной проверки API. |
+| `/api/v1/schema/redoc/` | ReDoc-представление API-документации. |
+
+Swagger UI и ReDoc используют локальные static-ресурсы из `drf-spectacular-sidecar`,
+поэтому не требуют загрузки файлов из сети.
+
+Ошибки приложения приводятся к единому JSON-формату с полями `detail` и `code`.
+Для ошибок валидации возвращаются детальные сообщения по полям, а для части прикладных ошибок,
+например отсутствующих ID в `items`, схема содержит специализированный формат ответа.
 
 Для методов API, возвращающих списки элементов, доступна пагинация limit-offset. Чтобы её активировать,
 необходимо передать дополнительные query-параметры `limit` и `offset`.

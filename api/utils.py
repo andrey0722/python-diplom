@@ -1,26 +1,59 @@
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Final, cast
 
 from rest_framework import status
 from rest_framework.exceptions import APIException
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import NotAuthenticated
+from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError
+from rest_framework.serializers import BaseSerializer
 from rest_framework.views import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
 from .exceptions import BasketCheckoutError
+from .exceptions import InvalidOrderStateTransitionError
 from .exceptions import InvalidParameterError
+from .exceptions import LoginError
+from .exceptions import MissingIdsError
 from .exceptions import NotBasketCheckoutError
 from .exceptions import NotFoundError
 from .exceptions import ParsingError
 from .exceptions import WebRequestError
+from .serializers import ApplicationErrorSerializer
+from .serializers import MissingIdsErrorSerializer
 
-EXCEPTION_STATUS_MAPPING: Final[dict[type[Exception], int]] = {
-    InvalidParameterError: status.HTTP_400_BAD_REQUEST,
-    NotFoundError: status.HTTP_404_NOT_FOUND,
-    WebRequestError: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    ParsingError: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    BasketCheckoutError: status.HTTP_409_CONFLICT,
-    NotBasketCheckoutError: status.HTTP_400_BAD_REQUEST,
+
+@dataclass(frozen=True)
+class ExceptionInfo:
+    """Exception-to-response mapping entry."""
+
+    status_code: int
+    serializer: type[BaseSerializer] = ApplicationErrorSerializer
+
+
+EXCEPTION_REGISTRY: Final[dict[type[Exception], ExceptionInfo]] = {
+    InvalidParameterError: ExceptionInfo(status.HTTP_400_BAD_REQUEST),
+    LoginError: ExceptionInfo(status.HTTP_401_UNAUTHORIZED),
+    NotFoundError: ExceptionInfo(status.HTTP_404_NOT_FOUND),
+    MissingIdsError: ExceptionInfo(
+        status_code=status.HTTP_404_NOT_FOUND,
+        serializer=MissingIdsErrorSerializer,
+    ),
+    WebRequestError: ExceptionInfo(status.HTTP_422_UNPROCESSABLE_ENTITY),
+    ParsingError: ExceptionInfo(status.HTTP_422_UNPROCESSABLE_ENTITY),
+    BasketCheckoutError: ExceptionInfo(status.HTTP_409_CONFLICT),
+    NotBasketCheckoutError: ExceptionInfo(status.HTTP_400_BAD_REQUEST),
+    InvalidOrderStateTransitionError: ExceptionInfo(
+        status.HTTP_400_BAD_REQUEST
+    ),
+    # DRF errors
+    AuthenticationFailed: ExceptionInfo(AuthenticationFailed.status_code),
+    NotAuthenticated: ExceptionInfo(NotAuthenticated.status_code),
+    PermissionDenied: ExceptionInfo(PermissionDenied.status_code),
+    NotFound: ExceptionInfo(NotFound.status_code),
 }
 
 
@@ -80,17 +113,26 @@ def standard_exception_handler(
         Response | None: The DRF response object, or None if not handled.
     """
     response = drf_exception_handler(exc, context)
-    if response is not None and isinstance(exc, APIException):
+    if response is not None:
+        data = cast(dict[str, Any], response.data)
         if isinstance(exc, ValidationError):
             # Include 'code' fields for each validation error message
             response.data = exc.get_full_details()
-        else:
+        elif isinstance(exc, APIException):
             # Include 'code' field in the response
-            data = cast(dict[str, Any], response.data)
             response.data = {
                 'detail': data.get('detail', response.data),
                 'code': exc.get_codes(),
             }
+        else:
+            detail = data.get('detail', data)
+            if hasattr(detail, 'code'):
+                # Include 'code' field in the response
+                response.data = {
+                    'detail': detail,
+                    'code': detail.code,
+                }
+
     return response
 
 
@@ -109,26 +151,31 @@ def custom_exception_handler(
         Response | None: A normalized response for application errors,
             or None if the exception is not mapped.
     """
-    status_code = get_exception_status_code(exc)
-    if status_code is None:
+    info = get_exception_info(exc)
+    if info is None:
         return None
-    response = Response(status=status_code)
+    response = Response(status=info.status_code)
     return prepare_response_data(exc, response)
 
 
-def get_exception_status_code(exc: Exception) -> int | None:
+def get_exception_info(
+    exc: Exception | type[Exception],
+) -> ExceptionInfo | None:
     """Map a custom application exception to an HTTP status code.
 
     Args:
-        exc (Exception): The exception instance to map.
+        exc (Exception | type[Exception]): The exception instance
+            or class to map.
 
     Returns:
-        int | None: The configured status code for the exception type,
+        ExceptionInfo | None: The configured mapping for the exception type,
             or None if no mapping exists.
     """
-    for cls in type(exc).__mro__:
-        if cls in EXCEPTION_STATUS_MAPPING:
-            return EXCEPTION_STATUS_MAPPING[cls]
+    if not isinstance(exc, type):
+        exc = type(exc)
+    for cls in exc.__mro__:
+        if cls in EXCEPTION_REGISTRY:
+            return EXCEPTION_REGISTRY[cls]
     return None
 
 

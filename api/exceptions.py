@@ -96,6 +96,27 @@ class InvalidParameterError(ApplicationError):
     default_code = 'invalid_parameter_error'
 
 
+class LoginError(ApplicationError):
+    """User has failed to login."""
+
+    default_detail = _('Login error.')
+    default_code = 'login_error'
+
+
+class InvalidCredentialsError(LoginError):
+    """User submitted invalid credentials for login."""
+
+    default_detail = _('Invalid email or password.')
+    default_code = 'invalid_credentials_error'
+
+
+class LoginInactiveError(LoginError):
+    """User has failed to login."""
+
+    default_detail = _('User inactive or deleted.')
+    default_code = 'login_inactive_error'
+
+
 class NotFoundError(ApplicationError):
     """Requested application resource was not found."""
 
@@ -223,6 +244,7 @@ class NotBasketCheckoutError(BasketCheckoutError):
 class InvalidOrderStateTransitionError(ApplicationError):
     """Unable to change order state in this direction."""
 
+    default_detail = _('Unable to change order state in this direction.')
     default_code = 'invalid_order_state_transition_error'
 
     def __init__(

@@ -7,8 +7,13 @@ from django.conf import settings
 from django.core.validators import URLValidator
 from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
+from .exceptions import MissingIdsError
 from .models import Category
 from .models import Contact
 from .models import Order
@@ -18,6 +23,7 @@ from .models import ShopOffer
 from .models import User
 
 
+@extend_schema_field(OpenApiTypes.PASSWORD)
 class PasswordField(serializers.CharField):
     """Password input field using hidden input rendering in forms."""
 
@@ -60,6 +66,68 @@ class UserFilteredPrimaryKeyField(serializers.PrimaryKeyRelatedField):
         return queryset.filter(user=user)
 
 
+class ApplicationErrorSerializer(serializers.Serializer):
+    """Serializer for standard application error responses."""
+
+    detail = serializers.CharField()
+    code = serializers.CharField()
+
+
+class MissingIdsDetailSerializer(serializers.Serializer):
+    """Serializer for `MissingIdsError` ID details."""
+
+    error = serializers.CharField()
+    input = serializers.ListField(child=serializers.IntegerField())
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            name=MissingIdsError.default_code,
+            value={
+                'detail': {
+                    'error': MissingIdsError.default_detail,
+                    'input': [5, 6, 4],
+                },
+                'code': MissingIdsError.default_code,
+            },
+            response_only=True,
+        ),
+    ],
+)
+class MissingIdsErrorSerializer(serializers.Serializer):
+    """Serializer for `MissingIdsError` error responses."""
+
+    detail = MissingIdsDetailSerializer()
+    code = serializers.CharField()
+
+
+TEST_USER_EXAMPLE = OpenApiExample(
+    name='Test user',
+    value={
+        'email': 'test_user@example.com',
+        'password': '123',
+    },
+    request_only=True,
+)
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            name='Example',
+            value={
+                'email': 'user@example.com',
+                'password': 'password',
+                'first_name': 'Ted',
+                'last_name': 'Bundy',
+                'company': 'Big company',
+                'position': 'Cool job',
+            },
+        ),
+        TEST_USER_EXAMPLE,
+    ],
+)
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model with password handling."""
 
@@ -179,13 +247,34 @@ class PasswordResetConfirmSerializer(EmailToUserSerializer):
     token = serializers.CharField()
 
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            name='Example',
+            value={
+                'email': 'user@example.com',
+                'password': 'password',
+            },
+        ),
+        TEST_USER_EXAMPLE,
+    ],
+)
 class UserLoginSerializer(serializers.Serializer):
     """Serializer for user login credentials."""
 
     email = serializers.EmailField()
-    password = serializers.CharField(style={'input_type': 'password'})
+    password = PasswordField()
 
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            name='Response',
+            value={'token': 'example_user_token'},
+            response_only=True,
+        ),
+    ],
+)
 class TokenSerializer(serializers.Serializer):
     """Serializer for token response."""
 
@@ -220,6 +309,14 @@ class IdSerializer(serializers.Serializer):
     id = serializers.IntegerField()
 
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            name='Example',
+            value={'items': '5,6,4'},
+        ),
+    ],
+)
 class ItemsSerializer(serializers.Serializer):
     """Serializer for comma-separated list of item IDs."""
 
