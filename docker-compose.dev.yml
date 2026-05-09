@@ -64,6 +64,10 @@ services:
         - action: rebuild
           path: Dockerfile
 
+  redis:
+    ports:
+      - 6379:6379
+
   db:
     ports:
       - 55432:5432

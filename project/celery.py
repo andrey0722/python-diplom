@@ -15,3 +15,7 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
+
+# Test celery broker connection
+with app.connection_or_acquire() as conn:
+    conn.ensure_connection(max_retries=3)

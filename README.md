@@ -65,8 +65,8 @@ cp .env.example .env
 | `DJANGO_SECRET_KEY` | Секретный ключ Django. Для production задайте уникальное случайное значение. | `django-example-key` |
 | `DJANGO_DEBUG` | Включает режим разработки. В `True` доступен Debug Toolbar, подробные ответы и `file://` URL для импорта прайсов. | `True` |
 | `DJANGO_ALLOWED_HOSTS` | Список разрешенных host-имен через запятую. Для локальной разработки допустим `*`. | `localhost,127.0.0.1` |
-| `DATABASE_URL` | URL подключения к базе данных в формате `django-environ`. Для Docker backend получает внутренний PostgreSQL URL из Compose. | `postgres://user:password@localhost:5432/database` |
-| `CELERY_BROKER_URL` | URL брокера Celery. В проекте используется Redis. | `redis://default:redis_password@localhost:6379/0` |
+| `DATABASE_URL` | URL подключения к базе данных в формате `django-environ`. Для Docker backend получает внутренний PostgreSQL URL из Compose. | `postgres://user:password@127.0.0.1:5432/database` |
+| `CELERY_BROKER_URL` | URL брокера Celery. В проекте используется Redis. | `redis://default:redis_password@127.0.0.1:6379/0` |
 | `CELERY_WORKER_CONCURRENCY` | Количество процессов или потоков worker-а Celery. Для dev=режима достаточно `1`. | `1` |
 | `EMAIL_URL` | Настройка email backend для отправки email. Закомментированные строки в `.env.example` являются альтернативными настройками. | `filemail:///email` |
 | `LISTEN_PORT` | Внешний порт Nginx proxy при Docker-запуске. | `8080` |
@@ -76,7 +76,7 @@ cp .env.example .env
 
 - `filemail:///email` сохраняет сырые email-письма в локальную директорию `email` (относительно Celery backend);
 - `consolemail://` выводит письма в стандартный поток вывода Celery backend;
-- `smtp://localhost:1025` использовать локальный SMTP для отладки;
+- `smtp://127.0.0.1:1025` использовать локальный SMTP для отладки;
 - `smtp+tls://user:password@smtp.example.com:587` - пример реального SMTP-сервиса в production-like варианте.
 
 Для Docker dev-окружения с Mailpit доступен вариант с `EMAIL_URL=smtp://smtp:1025`, это значение по умолчанию
@@ -112,6 +112,7 @@ cp .env.example .env
 - Django Admin через Nginx: `http://127.0.0.1:8080/admin/`;
 - Mailpit Web UI: `http://127.0.0.1:8025/`;
 - PostgreSQL: `postgres://postgres_user:postgres_password@127.0.0.1:55432/db`, если используется значения по умолчанию.
+- Redis: `redis://default:redis_password@127.0.0.1:6379/0`, если используются значения по умолчанию.
 
 Dev-администратор создается с email `admin@example.com` и паролем `123`. Эти данные предназначены только для локальной разработки.
 
@@ -167,6 +168,7 @@ python compose.py prod logs
 Подходит для локальной разработки, но PostgreSQL и Redis нужно запустить отдельно.
 Для упрощенного локального режима можно использовать SQLite и
 консольную почту `consolemail://` или dummy-заглушку `dummymail://`.
+Redis должен быть доступен по `CELERY_BROKER_URL`: Celery-приложение проверяет подключение к брокеру при инициализации.
 
 1. Создайте виртуальное окружение и установите зависимости:
 
@@ -190,7 +192,7 @@ python compose.py prod logs
    DJANGO_DEBUG=True
    DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
    DATABASE_URL=sqlite:///db.sqlite3
-   CELERY_BROKER_URL=redis://default:redis_password@localhost:6379/0
+   CELERY_BROKER_URL=redis://default:redis_password@127.0.0.1:6379/0
    EMAIL_URL=consolemail://
    SQL_TRACE=False
    ```
