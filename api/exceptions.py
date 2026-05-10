@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext import StrPromise
+from rest_framework.exceptions import Throttled
 import yaml
 
 from .models import OrderState
@@ -266,3 +267,6 @@ class InvalidOrderStateTransitionError(ApplicationError):
             new=new,
         )
         super().__init__(detail, code)
+
+
+THROTTLED_EXAMPLE = Throttled(123)

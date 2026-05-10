@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import random
 import re
+import time
 from typing import Any, ClassVar, Protocol, cast, override
 
 from faker import Faker
@@ -20,6 +21,8 @@ USER_EMAIL = 'test_user@example.com'
 USER_PASSWORD = '123'
 
 API_ROOT = f'{SERVER_ADDRESS}/api/v1'
+NUMBER_REGEX = re.compile(r'(\d+)')
+DEFAULT_THROTTLE_WAIT_SECONDS = 2
 FAKER_LOCALE = 'ru_RU'
 FAKER_PHONE_TEMPLATE = '+79#########'
 APARTMENT_TEMPLATE = '%##'
@@ -292,6 +295,39 @@ def validation_codes_equal(data: dict[str, Any], field: str, *codes: str):
     expected_codes = set(codes)
     found_codes = get_validation_error_codes(data, field)
     return found_codes == expected_codes
+
+
+def test_error(
+    response: httpx.Response,
+    status_code: int,
+    expected_code: str,
+) -> bool:
+    """Return whether a response contains the expected API error.
+
+    Args:
+        response (httpx.Response): Response returned by the API.
+        status_code (int): Expected HTTP status code.
+        expected_code (str): Expected application error code.
+
+    Returns:
+        bool: True when both status and error code match.
+    """
+    if response.status_code == status_code:
+        json: dict[str, Any] = response.json()
+        if json['code'] == expected_code:
+            return True
+    return False
+
+
+def get_throttle_wait_seconds(response: httpx.Response) -> int | None:
+    if not test_error(response, httpx.codes.TOO_MANY_REQUESTS, 'throttled'):
+        return None
+    data = response.json()
+    detail = data['detail']
+    if match := re.search(NUMBER_REGEX, detail):
+        return int(match[0])
+    # Not found any numbers in the response, use the default
+    return DEFAULT_THROTTLE_WAIT_SECONDS
 
 
 def fail_if_error(response: httpx.Response) -> None:
@@ -864,6 +900,42 @@ def make_order(session: httpx.Client, test_user: UserData):
     order = place_order(session, token, order['id'], select_contact(contacts))
 
 
+def retry_throttling[**P, T: httpx.Response](
+    func: Callable[P, T],
+) -> Callable[P, T]:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        while True:
+            response = func(*args, **kwargs)
+            if seconds := get_throttle_wait_seconds(response):
+                # Wait for a cooldown
+                time.sleep(random.uniform(1, seconds))
+                continue
+            return response
+
+    return wrapper
+
+
+def retry_request_error[**P, T](
+    func: Callable[P, T],
+) -> Callable[P, T]:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        retries = 10
+        fail_count = 0
+        while True:
+            try:
+                response = func(*args, **kwargs)
+            except httpx.RequestError:
+                fail_count += 1
+                if fail_count >= retries:
+                    raise
+            else:
+                return response
+
+    return wrapper
+
+
 class SessionWrapper(httpx.Client):
     """HTTP client with simple retry support for example requests."""
 
@@ -873,28 +945,11 @@ class SessionWrapper(httpx.Client):
         """Initialize the client without a request timeout."""
         super().__init__(timeout=None)
 
+    @retry_request_error
+    @retry_throttling
     @override
     def request(self, *args: Any, **kwargs: Any) -> httpx.Response:
-        """Send a request with retry attempts for connection errors.
-
-        Args:
-            *args (Any): Positional request arguments.
-            **kwargs (Any): Keyword request arguments.
-
-        Returns:
-            httpx.Response: HTTP response from the server.
-        """
-        retries = self.RETRIES
-        fail_count = 0
-        while True:
-            try:
-                response = super().request(*args, **kwargs)
-            except httpx.RequestError:
-                fail_count += 1
-                if fail_count >= retries:
-                    raise
-            else:
-                return response
+        return super().request(*args, **kwargs)
 
 
 def main():

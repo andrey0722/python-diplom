@@ -13,6 +13,7 @@ Backend-приложение на Django REST Framework для автомати�
 - отмена заказа с возвратом зарезервированного количества к другим заказам;
 - жизненный цикл заказа: `new`, `confirmed`, `assembled`, `sent`, `completed`, `cancelled`;
 - отдельные API-методы для поставщика: обновление прайса, включение или отключение приема заказов, просмотр заказов по своему магазину;
+- ограничение частоты API-запросов для анонимных и авторизованных пользователей, email-операций, входа и оформления заказов;
 - расширенная Django Admin: редактирование данных, оформление корзины, ограниченные переходы статусов заказа, защита активных заказов от некорректного редактирования;
 - email-уведомления через Celery: подтверждение email, сброс пароля, создание заказа, отмена заказа, смена статуса, уведомления администраторам магазинов;
 - окружение Docker Compose с backend, PostgreSQL, Redis, Celery, Nginx и Mailpit для разработки.
@@ -22,7 +23,7 @@ Backend-приложение на Django REST Framework для автомати�
 - Python 3.14+;
 - Django 6.0, Django REST Framework;
 - PostgreSQL для Docker-запуска, SQLite возможен для локальной разработки;
-- Redis в качестве брокера Celery;
+- Redis в качестве брокера Celery и cache backend;
 - Celery для фоновой отправки email;
 - django-filter, django-environ, django-admin-extra-buttons;
 - drf-spectacular для OpenAPI-схемы, Swagger UI и ReDoc;
@@ -36,6 +37,7 @@ api/                    Основное приложение: модели, API
 api/templates/api/       TXT/HTML email-шаблоны
 api/management/commands/ Команда manage.py celery для dev-worker с autoreload
 api/schema.py            OpenAPI-настройки и helper-функции для схемы ответов
+api/throttling.py        Расширенные DRF throttle-классы для лимитов запросов
 project/                Настройки Django, URLconf, ASGI/WSGI, Celery app, health-check
 shop_data/              Примеры YAML-прайсов и некорректные файлы для проверки валидации
 compose.py              Обертка над Docker Compose командами для dev/prod окружений
@@ -68,6 +70,7 @@ cp .env.example .env
 | `DJANGO_DEBUG` | Включает режим разработки. В `True` доступен Debug Toolbar, подробные ответы и `file://` URL для импорта прайсов. | `True` |
 | `DJANGO_ALLOWED_HOSTS` | Список разрешенных host-имен через запятую. Для локальной разработки допустим `*`. | `localhost,127.0.0.1` |
 | `DATABASE_URL` | URL подключения к базе данных в формате `django-environ`. Для Docker backend получает внутренний PostgreSQL URL из Compose. | `postgres://user:password@127.0.0.1:5432/database` |
+| `CACHE_URL` | URL Django cache в формате `django-environ`. Используется DRF throttling для хранения счетчиков запросов. Закомментированный `filecache://.cache` подходит для простого локального запуска. | `redis://default:redis_password@127.0.0.1:6379/1` |
 | `CELERY_BROKER_URL` | URL брокера Celery. В проекте используется Redis. | `redis://default:redis_password@127.0.0.1:6379/0` |
 | `CELERY_WORKER_CONCURRENCY` | Количество процессов или потоков worker-а Celery. Для dev=режима достаточно `1`. | `1` |
 | `EMAIL_URL` | Настройка email backend для отправки email. Закомментированные строки в `.env.example` являются альтернативными настройками. | `filemail:///email` |
@@ -113,8 +116,9 @@ cp .env.example .env
 - Django Admin: `http://127.0.0.1:8000/admin/`;
 - Django Admin через Nginx: `http://127.0.0.1:8080/admin/`;
 - Mailpit Web UI: `http://127.0.0.1:8025/`;
-- PostgreSQL: `postgres://postgres_user:postgres_password@127.0.0.1:55432/db`, если используется значения по умолчанию.
-- Redis: `redis://default:redis_password@127.0.0.1:6379/0`, если используются значения по умолчанию.
+- PostgreSQL: `postgres://postgres_user:postgres_password@127.0.0.1:55432/db`, если используются значения по умолчанию.
+- Redis broker: `redis://default:redis_password@127.0.0.1:6379/0`, если используются значения по умолчанию.
+- Redis cache: `redis://default:redis_password@127.0.0.1:6379/1`, если используются значения по умолчанию.
 
 Dev-администратор создается с email `admin@example.com` и паролем `123`. Эти данные предназначены только для локальной разработки.
 
@@ -171,6 +175,8 @@ python compose.py prod logs
 Для упрощенного локального режима можно использовать SQLite и
 консольную почту `consolemail://` или dummy-заглушку `dummymail://`.
 Redis должен быть доступен по `CELERY_BROKER_URL`: Celery-приложение проверяет подключение к брокеру при инициализации.
+Для `CACHE_URL` в локальной разработке можно использовать Redis либо файловый cache `filecache://.cache`;
+для нескольких процессов backend-а предпочтителен общий Redis cache, чтобы лимиты запросов применялись согласованно.
 
 1. Создайте виртуальное окружение и установите зависимости:
 
@@ -194,6 +200,7 @@ Redis должен быть доступен по `CELERY_BROKER_URL`: Celery-п
    DJANGO_DEBUG=True
    DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
    DATABASE_URL=sqlite:///db.sqlite3
+   CACHE_URL=filecache://.cache
    CELERY_BROKER_URL=redis://default:redis_password@127.0.0.1:6379/0
    EMAIL_URL=consolemail://
    SQL_TRACE=False
@@ -311,6 +318,22 @@ Swagger UI и ReDoc используют локальные static-ресурс�
 Ошибки приложения приводятся к единому JSON-формату с полями `detail` и `code`.
 Для ошибок валидации возвращаются детальные сообщения по полям, а для части прикладных ошибок,
 например отсутствующих ID в `items`, схема содержит специализированный формат ответа.
+
+Если лимит частоты запросов превышен, API возвращает HTTP `429 Too Many Requests`
+с кодом ошибки `throttled`. Счетчики throttling хранятся в Django cache, поэтому
+для стабильной работы лимитов в Docker используется Redis database `1`.
+
+Настроенные лимиты:
+
+| Scope | Лимит | Где применяется |
+| --- | --- | --- |
+| `anon` | `200/min` | Все анонимные API-запросы. |
+| `user` | `10/sec` | Все запросы авторизованных пользователей. |
+| `registration` | `20/min` | Регистрация пользователя. |
+| `email` | `1/3min` | Повторная отправка писем подтверждения и сброса пароля на один email. |
+| `verify` | `5/min` | Подтверждение email и сброса пароля по токену для одного email. |
+| `login` | `5/min` | Попытки входа для одного email. |
+| `order` | `1/5sec` | Оформление или повторное открытие заказа через `POST /api/v1/order`. |
 
 Для методов API, возвращающих списки элементов, доступна пагинация limit-offset. Чтобы её активировать,
 необходимо передать дополнительные query-параметры `limit` и `offset`.
@@ -518,6 +541,8 @@ python compose.py dev manage test
 - отмену заказа;
 
 Перед запуском проверьте константы в начале файла: адрес сервера, email тестового пользователя, источник YAML-файлов и количество создаваемых данных.
+Оба сценария учитывают API throttling: при ответе `429 Too Many Requests` они извлекают время ожидания из ответа,
+выдерживают паузу и повторяют запрос.
 
 ```powershell
 python -m pip install -r requirements.dev.txt

@@ -33,6 +33,7 @@ from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
 from .authentication import TokenAuthentication
+from .exceptions import THROTTLED_EXAMPLE
 from .exceptions import BasketCheckoutError
 from .exceptions import InvalidCredentialsError
 from .exceptions import InvalidOrderStateTransitionError
@@ -103,10 +104,15 @@ logger = logging.getLogger(__name__)
 
 @extend_schema(
     description=_('Request a verification email message.'),
-    responses=message_response_dict(_('Verification is sent if needed.')),
+    responses={
+        **message_response_dict(_('Verification is sent if needed.')),
+        **error_response_dict(THROTTLED_EXAMPLE),
+    },
 )
 class SendVerificationView(GenericAPIView):
     """View for sending verification emails."""
+
+    throttle_email_scope = 'email'
 
     serializer_class = None
     response_message = _('Verification is sent if needed.')
@@ -154,11 +160,13 @@ class SendVerificationView(GenericAPIView):
     description=_('Confirm a user token and perform required action.'),
     responses={
         **message_response_dict(_('Token confirmed.')),
-        **error_response_dict(TokenConfirmError),
+        **error_response_dict(TokenConfirmError, THROTTLED_EXAMPLE),
     },
 )
 class TokenConfirmView(GenericAPIView):
     """Base view for validating user confirmation tokens."""
+
+    throttle_email_scope = 'verify'
 
     serializer_class = None
     """Serializer must have 'user' and 'token' fields."""
@@ -235,12 +243,14 @@ class TokenConfirmView(GenericAPIView):
             code='unique',
             message=_('User with this email address already exists.'),
         ),
+        **error_response_dict(THROTTLED_EXAMPLE),
     },
 )
 class UserRegisterView(CreateAPIView):
     """View for user registration."""
 
     serializer_class = UserSerializer
+    throttle_scope = 'registration'
 
     @override
     def perform_create(self, serializer: BaseSerializer):
@@ -332,13 +342,18 @@ class PasswordResetConfirmView(TokenConfirmView):
     description=_('Enter user credentials and acquire a new API token.'),
     responses={
         **data_response_dict(TokenSerializer),
-        **error_response_dict(InvalidCredentialsError, LoginInactiveError),
+        **error_response_dict(
+            InvalidCredentialsError,
+            LoginInactiveError,
+            THROTTLED_EXAMPLE,
+        ),
     },
 )
 class UserLoginView(APIView):
     """View for user authentication and creating login tokens."""
 
     serializer_class = UserLoginSerializer
+    throttle_email_scope = 'login'
 
     def post(self, request: Request) -> Response:
         """Authenticate user and return new user API token.
@@ -369,7 +384,11 @@ class UserLoginView(APIView):
     description=_('Get the current user profile info.'),
     responses={
         **data_response_dict(UserSerializer),
-        **error_response_dict(AuthenticationFailed, NotAuthenticated),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            THROTTLED_EXAMPLE,
+        ),
     },
 )
 class UserInfoView(RetrieveAPIView, UpdateModelMixin):
@@ -406,7 +425,11 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
 @extend_schema(
     responses={
         **data_response_dict(ContactSerializer),
-        **error_response_dict(AuthenticationFailed, NotAuthenticated),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            THROTTLED_EXAMPLE,
+        ),
     },
 )
 @extend_schema_view(
@@ -418,7 +441,11 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
                 serializer=ContactSerializer,
                 status_code=status.HTTP_201_CREATED,
             ),
-            **error_response_dict(AuthenticationFailed, NotAuthenticated),
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                THROTTLED_EXAMPLE,
+            ),
         },
     ),
     put=extend_schema(
@@ -469,6 +496,7 @@ class UserContactsView(
                 MissingIdsError,
                 AuthenticationFailed,
                 NotAuthenticated,
+                THROTTLED_EXAMPLE,
             ),
         },
     )
@@ -504,6 +532,7 @@ class UserContactsView(
             YAMLParsingError,
             WebRequestConnectError,
             WebRequestResponseStatusError,
+            THROTTLED_EXAMPLE,
         ),
     },
 )
@@ -551,6 +580,7 @@ class ShopUpdateView(APIView):
             AuthenticationFailed,
             NotAuthenticated,
             PermissionDenied,
+            THROTTLED_EXAMPLE,
         ),
     },
 )
@@ -623,6 +653,7 @@ class BaseShopOrderView(GenericAPIView):
             AuthenticationFailed,
             NotAuthenticated,
             PermissionDenied,
+            THROTTLED_EXAMPLE,
         ),
     },
 )
@@ -639,6 +670,7 @@ class ShopOrdersListView(BaseShopOrderView, ListAPIView):
             NotAuthenticated,
             PermissionDenied,
             NotFound(_('No orders matching this id.')),
+            THROTTLED_EXAMPLE,
         ),
     },
 )
@@ -648,7 +680,10 @@ class ShopOrderView(BaseShopOrderView, RetrieveAPIView):
 
 @extend_schema(
     description=_('List active shops with optional filtering.'),
-    responses=data_response_dict(ShopSerializer),
+    responses={
+        **data_response_dict(ShopSerializer),
+        **error_response_dict(THROTTLED_EXAMPLE),
+    },
 )
 class ShopListView(ListAPIView):
     """List view for shops with optional name filtering."""
@@ -660,7 +695,10 @@ class ShopListView(ListAPIView):
 
 @extend_schema(
     description=_('List product categories with optional filtering.'),
-    responses=data_response_dict(CategorySerializer),
+    responses={
+        **data_response_dict(CategorySerializer),
+        **error_response_dict(THROTTLED_EXAMPLE),
+    },
 )
 class CategoryListView(ListAPIView):
     """List view for product categories with optional name filtering."""
@@ -672,7 +710,10 @@ class CategoryListView(ListAPIView):
 
 @extend_schema(
     description=_('List shop offers with optional filters.'),
-    responses=data_response_dict(ShopOfferSerializer),
+    responses={
+        **data_response_dict(ShopOfferSerializer),
+        **error_response_dict(THROTTLED_EXAMPLE),
+    },
 )
 class ShopOfferListView(ListAPIView):
     """List view for shop offers with optional shop and category filtering."""
@@ -693,6 +734,7 @@ class ShopOfferListView(ListAPIView):
                 AuthenticationFailed,
                 NotAuthenticated,
                 NotFound(_('Basket for this user does not exist yet.')),
+                THROTTLED_EXAMPLE,
             ),
         },
     ),
@@ -719,6 +761,7 @@ class BasketView(
                 AuthenticationFailed,
                 NotAuthenticated,
                 MissingIdsError,
+                THROTTLED_EXAMPLE,
             ),
         },
     )
@@ -743,6 +786,7 @@ class BasketView(
                 AuthenticationFailed,
                 NotAuthenticated,
                 MissingIdsError,
+                THROTTLED_EXAMPLE,
             ),
         },
     )
@@ -768,6 +812,7 @@ class BasketView(
                 AuthenticationFailed,
                 NotAuthenticated,
                 MissingIdsError,
+                THROTTLED_EXAMPLE,
             ),
         },
     )
@@ -801,12 +846,25 @@ class BaseUserOrdersView(GetQuerySetByAuthUserMixin):
         description=_('List orders placed by the current user.'),
         responses={
             **data_response_dict(OrderSerializer),
-            **error_response_dict(AuthenticationFailed, NotAuthenticated),
+            **error_response_dict(
+                AuthenticationFailed,
+                NotAuthenticated,
+                THROTTLED_EXAMPLE,
+            ),
         },
     )
 )
 class UserOrdersListView(BaseUserOrdersView, ListAPIView, RetrieveModelMixin):
     """List orders placed by user and place new orders."""
+
+    @property
+    def throttle_scope(self) -> str | None:
+        """Return the order throttle scope for checkout requests."""
+        try:
+            method = self.request.method
+        except AttributeError:
+            method = None
+        return 'order' if method == 'POST' else None
 
     @extend_schema(
         description=_('Checkout the basket or reopen a canceled order.'),
@@ -817,6 +875,7 @@ class UserOrdersListView(BaseUserOrdersView, ListAPIView, RetrieveModelMixin):
                 NotAuthenticated,
                 BasketCheckoutError,
                 InvalidOrderStateTransitionError,
+                THROTTLED_EXAMPLE,
             ),
         },
     )
@@ -849,6 +908,7 @@ class UserOrdersListView(BaseUserOrdersView, ListAPIView, RetrieveModelMixin):
                 AuthenticationFailed,
                 NotAuthenticated,
                 NotFound(_('Order not found.')),
+                THROTTLED_EXAMPLE,
             ),
         },
     ),
@@ -860,6 +920,7 @@ class UserOrdersListView(BaseUserOrdersView, ListAPIView, RetrieveModelMixin):
                 AuthenticationFailed,
                 NotAuthenticated,
                 NotFound(_('Order not found.')),
+                THROTTLED_EXAMPLE,
             ),
         },
     ),

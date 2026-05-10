@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import random
 import re
+from types import CoroutineType
 from typing import Any, ClassVar, Protocol, cast, override
 
 from faker import Faker
@@ -21,6 +22,8 @@ USER_EMAIL = 'test_user@example.com'
 USER_PASSWORD = '123'
 
 API_ROOT = f'{SERVER_ADDRESS}/api/v1'
+NUMBER_REGEX = re.compile(r'(\d+)')
+DEFAULT_THROTTLE_WAIT_SECONDS = 2
 FAKER_LOCALE = 'ru_RU'
 FAKER_PHONE_TEMPLATE = '+79#########'
 APARTMENT_TEMPLATE = '%##'
@@ -324,6 +327,17 @@ def test_error(
         if json['code'] == expected_code:
             return True
     return False
+
+
+def get_throttle_wait_seconds(response: httpx.Response) -> int | None:
+    if not test_error(response, httpx.codes.TOO_MANY_REQUESTS, 'throttled'):
+        return None
+    data = response.json()
+    detail = data['detail']
+    if match := re.search(NUMBER_REGEX, detail):
+        return int(match[0])
+    # Not found any numbers in the response, use the default
+    return DEFAULT_THROTTLE_WAIT_SECONDS
 
 
 def fail_if_error(response: httpx.Response) -> None:
@@ -983,15 +997,51 @@ async def make_orders(session: httpx.AsyncClient, tokens: list[str]) -> None:
             tg.create_task(make_order(session, token))
 
 
+def retry_throttling[**P, T: httpx.Response](
+    func: Callable[P, CoroutineType[Any, Any, T]],
+) -> Callable[P, CoroutineType[Any, Any, T]]:
+    @functools.wraps(func)
+    async def wrapper(*args: Any, **kwargs: Any) -> T:
+        while True:
+            response = await func(*args, **kwargs)
+            if seconds := get_throttle_wait_seconds(response):
+                # Wait for a cooldown
+                await asyncio.sleep(random.uniform(1, seconds))
+                continue
+            return response
+
+    return wrapper
+
+
+def retry_request_error[**P, T](
+    func: Callable[P, CoroutineType[Any, Any, T]],
+) -> Callable[P, CoroutineType[Any, Any, T]]:
+    @functools.wraps(func)
+    async def wrapper(*args: Any, **kwargs: Any) -> T:
+        retries = 10
+        fail_count = 0
+        while True:
+            try:
+                response = await func(*args, **kwargs)
+            except httpx.RequestError:
+                fail_count += 1
+                if fail_count >= retries:
+                    raise
+            else:
+                return response
+
+    return wrapper
+
+
 class SessionWrapper(httpx.AsyncClient):
     """HTTP client with simple retry support for example requests."""
-
-    RETRIES: ClassVar[int] = 10
 
     def __init__(self) -> None:
         """Initialize the client without a request timeout."""
         super().__init__(timeout=None)
 
+    @retry_request_error
+    @retry_throttling
     @override
     async def request(self, *args: Any, **kwargs: Any) -> httpx.Response:
         """Send a request with retry attempts for connection errors.
@@ -1003,19 +1053,9 @@ class SessionWrapper(httpx.AsyncClient):
         Returns:
             httpx.Response: HTTP response from the server.
         """
-        retries = self.RETRIES
-        fail_count = 0
-        while True:
-            try:
-                # Add a random delay to shuffle the requests a bit
-                await asyncio.sleep(random.uniform(0.15, 0.6))
-                response = await super().request(*args, **kwargs)
-            except httpx.RequestError:
-                fail_count += 1
-                if fail_count >= retries:
-                    raise
-            else:
-                return response
+        # Add a random delay to shuffle the requests a bit
+        await asyncio.sleep(random.uniform(0.6, 2.4))
+        return await super().request(*args, **kwargs)
 
 
 async def main():

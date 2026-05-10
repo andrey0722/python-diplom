@@ -8,6 +8,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.exceptions import NotAuthenticated
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import Throttled
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import Response
@@ -54,6 +55,7 @@ EXCEPTION_REGISTRY: Final[dict[type[Exception], ExceptionInfo]] = {
     NotAuthenticated: ExceptionInfo(NotAuthenticated.status_code),
     PermissionDenied: ExceptionInfo(PermissionDenied.status_code),
     NotFound: ExceptionInfo(NotFound.status_code),
+    Throttled: ExceptionInfo(Throttled.status_code),
 }
 
 

@@ -1,5 +1,6 @@
 response.html
 schema.yml
+/.cache/
 /email/
 /static/
 

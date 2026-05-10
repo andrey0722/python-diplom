@@ -257,6 +257,22 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'api.throttling.AnonRateThrottle',
+        'api.throttling.UserRateThrottle',
+        'api.throttling.ScopedRateThrottle',
+        'api.throttling.EmailScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '200/min',
+        'user': '10/sec',
+        'registration': '20/min',
+        'email': '1/3min',
+        'verify': '5/min',
+        'login': '5/min',
+        'order': '1/5sec',
+    },
+    'NUM_PROXIES': 1,
     'DEFAULT_SCHEMA_CLASS': 'api.schema.AutoSchema',
 }
 
@@ -282,6 +298,18 @@ DATABASES = {
             default='sqlite:///db.sqlite3',  # type: ignore[reportArgumentType]
         ),
         'CONN_MAX_AGE': 0,
+    }
+}
+
+# Cache
+# https://docs.djangoproject.com/en/6.0/ref/settings/#caches
+
+CACHES = {
+    'default': {
+        **env.cache(
+            'CACHE_URL',
+            default='filecache://.cache',  # pyright: ignore[reportArgumentType]
+        ),
     }
 }
 
