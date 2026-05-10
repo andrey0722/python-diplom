@@ -24,6 +24,7 @@ from rest_framework.generics import ListCreateAPIView
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.generics import RetrieveDestroyAPIView
 from rest_framework.generics import UpdateAPIView
+from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.mixins import UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -804,7 +805,7 @@ class BaseUserOrdersView(GetQuerySetByAuthUserMixin):
         },
     )
 )
-class UserOrdersListView(BaseUserOrdersView, ListAPIView):
+class UserOrdersListView(BaseUserOrdersView, ListAPIView, RetrieveModelMixin):
     """List orders placed by user and place new orders."""
 
     @extend_schema(
@@ -835,7 +836,8 @@ class UserOrdersListView(BaseUserOrdersView, ListAPIView):
             order = checkout_basket(order, contact, request)
         else:
             change_order_state(order, OrderState.NEW, contact, request)
-        return self.get(request, order.pk)
+        self.kwargs['pk'] = order.pk
+        return self.retrieve(request)
 
 
 @extend_schema_view(
