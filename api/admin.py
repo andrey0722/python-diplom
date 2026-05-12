@@ -25,7 +25,6 @@ from django.db.models.functions import Floor
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.http import HttpResponse
-from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.html import format_html
@@ -64,7 +63,7 @@ def get_admin_view(
     view: str,
     *args: object,
     **query: object,
-):
+) -> str:
     """Build the reverse URL for an admin view.
 
     Args:
@@ -82,25 +81,22 @@ def get_admin_view(
     return reverse(f'admin:{app}_{model}_{view}', args=args, query=query)
 
 
-def redirect_admin_view(
+def get_change_view(
     model_cls: type[Model],
-    view: str,
-    *args: object,
+    pk: object,
     **query: object,
-):
-    """Redirect to an admin view URL.
+) -> str:
+    """Build the reverse URL for a model admin change view.
 
     Args:
         model_cls (type[Model]): The model class for the admin view.
-        view (str): The admin view name.
-        *args (object): Positional arguments for the URL.
+        pk (object): The object primary key.
         **query (object): Query parameters for the URL.
 
     Returns:
-        HttpResponseRedirect: Redirect response to the admin URL.
+        str: The reversed admin change URL.
     """
-    url = get_admin_view(model_cls, view, *args, **query)
-    return HttpResponseRedirect(url)
+    return get_admin_view(model_cls, 'change', pk, **query)
 
 
 def app_error_message(request: HttpRequest, e: ApplicationError) -> None:
@@ -716,7 +712,7 @@ class OrderItemAdmin(
         if obj.order_id is None:
             return '-'
         proxy_model = obj.order.proxy_model
-        url = get_admin_view(proxy_model, 'change', obj.order_id)
+        url = get_change_view(proxy_model, obj.order_id)
         return format_html('<a href="{}">{}</a>', url, obj.order)
 
     @override
@@ -1025,11 +1021,7 @@ class BasketAdmin(
                 else:
                     messages.success(request, _('Order placed'))
                     context = {
-                        'redirect_url': get_admin_view(
-                            PlacedOrder,
-                            'change',
-                            order.pk,
-                        ),
+                        'redirect_url': get_change_view(PlacedOrder, order.pk),
                     }
                 close_template = getattr(self, 'close_template', '')
                 return TemplateResponse(request, close_template, context)

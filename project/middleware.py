@@ -2,13 +2,17 @@ from collections.abc import Callable
 import functools
 import logging
 import time
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.db import connection
 from django.db import reset_queries
 from django.http import HttpRequest
 from django.http import HttpResponse
+from django.shortcuts import redirect
 from django.utils.deprecation import MiddlewareMixin
+from social_core.exceptions import SocialAuthBaseException
+from social_django.middleware import SocialAuthExceptionMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -78,3 +82,43 @@ def debug_request_sql_stats(handler: RequestHandler) -> RequestHandler:
         return response
 
     return wrapper
+
+
+class SocialAuthAPIExceptionMiddleware(SocialAuthExceptionMiddleware):
+    """Redirect social-auth errors to API endpoint with query params."""
+
+    def process_exception(
+        self,
+        request: HttpRequest,
+        exception: Exception,
+    ) -> HttpResponse | None:
+        """Redirect social-auth exceptions to the configured error URL.
+
+        Args:
+            request (HttpRequest): Request that raised the exception.
+            exception (Exception): Exception raised by social-auth.
+
+        Returns:
+            HttpResponse | None: Redirect response for handled social-auth
+                errors, otherwise None.
+        """
+        strategy = getattr(request, 'social_strategy', None)
+        if strategy is None or self.raise_exception(request, exception):
+            return None
+
+        if not isinstance(exception, SocialAuthBaseException):
+            return None
+
+        backend = getattr(request, 'backend', None)
+        backend_name = getattr(backend, 'name', 'unknown-backend')
+
+        message = self.get_message(request, exception)
+        url = self.get_redirect_uri(request, exception)
+
+        if not url:
+            return None
+
+        query = urlencode({'message': message, 'backend': backend_name})
+        separator = '&' if '?' in url else '?'
+        url = f'{url}{separator}{query}'
+        return redirect(url)

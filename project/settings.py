@@ -52,11 +52,13 @@ INSTALLED_APPS = [
     'drf_spectacular_sidecar',
     'phonenumber_field',
     'rest_framework',
+    'social_django',
     # Project apps
     'api',
 ]
 
 MIDDLEWARE = [
+    'project.middleware.SocialAuthAPIExceptionMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -101,6 +103,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
             ],
         },
     },
@@ -314,6 +318,58 @@ CACHES = {
 }
 
 AUTH_USER_MODEL = 'api.User'
+
+# Authentication backends
+# https://docs.djangoproject.com/en/6.0/ref/settings/#authentication-backends
+
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.google.GoogleOAuth2',
+    'django.contrib.auth.backends.ModelBackend',  # Django default auth backend
+)
+
+# Python Social Auth settings
+# Authentication backends:
+# https://python-social-auth.readthedocs.io/en/latest/configuration/django.html
+# https://python-social-auth.readthedocs.io/en/latest/backends/index.html#supported-backends
+
+SOCIAL_AUTH_ADMIN_USER_SEARCH_FIELDS = ('email', 'first_name', 'last_name')
+SOCIAL_AUTH_JSONFIELD_ENABLED = True
+SOCIAL_AUTH_RAISE_EXCEPTIONS = False
+
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/api/v1/user/login/social/success'
+SOCIAL_AUTH_LOGIN_ERROR_URL = '/api/v1/user/login/social/error'
+SOCIAL_AUTH_SANITIZE_REDIRECTS = True
+
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'api.pipeline.require_verified_email',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.social_auth.associate_by_email',
+    'social_core.pipeline.user.create_user',
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
+)
+
+# Google Oauth2 settings
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = env.str(
+    'GOOGLE_OAUTH2_CLIENT_ID',
+    default='example.apps.googleusercontent.com',
+)
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = env.str(
+    'GOOGLE_OAUTH2_CLIENT_SECRET',
+    default='EXAMPLE-CLIENT-SECRET',
+)
+SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = [
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+]
+SOCIAL_AUTH_GOOGLE_OAUTH2_AUTH_EXTRA_ARGUMENTS = {
+    'prompt': 'select_account',
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

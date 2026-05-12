@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser
+from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.db import transaction
 from django.db.models import Model
@@ -36,6 +37,7 @@ from .exceptions import ErrorDict
 from .exceptions import ErrorList
 from .exceptions import InvalidOrderStateTransitionError
 from .exceptions import LazyErrorMessage
+from .exceptions import LoginInactiveError
 from .exceptions import MissingIdsError
 from .exceptions import NotBasketCheckoutError
 from .exceptions import WebRequestConnectError
@@ -55,6 +57,7 @@ from .models import Product
 from .models import ProductParameter
 from .models import Shop
 from .models import ShopOffer
+from .models import Token
 from .models import User
 from .models import retry_transaction
 from .serializers import EmailConfirmSerializer
@@ -1348,3 +1351,23 @@ def validate_order_state_transition(old: OrderState, new: OrderState) -> None:
     allowed = get_allowed_state_transitions(old)
     if new not in allowed:
         raise InvalidOrderStateTransitionError(old, new)
+
+
+def login_user(user: User) -> Token:
+    """Create an API token and emit the login signal for an active user.
+
+    Args:
+        user (User): User to log in.
+
+    Returns:
+        Token: Created API token.
+
+    Raises:
+        LoginInactiveError: If the user account is inactive.
+    """
+    if not user.is_active:
+        raise LoginInactiveError
+    token = create_model(Token, user=user)
+    # Update last_login
+    user_logged_in.send(login_user, user=user)
+    return token

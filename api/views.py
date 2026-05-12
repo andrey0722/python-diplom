@@ -1,7 +1,7 @@
 import logging
 from typing import Any, NoReturn, cast, override
 
-from django.contrib.auth.signals import user_logged_in
+from django.contrib.auth import logout
 from django.db.models import Exists
 from django.db.models import OuterRef
 from django.db.models import Prefetch
@@ -12,6 +12,7 @@ from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from drf_spectacular.utils import extend_schema_view
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.authentication import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.exceptions import NotAuthenticated
@@ -39,6 +40,7 @@ from .exceptions import InvalidCredentialsError
 from .exceptions import InvalidOrderStateTransitionError
 from .exceptions import LoginInactiveError
 from .exceptions import MissingIdsError
+from .exceptions import SocialLoginError
 from .exceptions import TokenConfirmError
 from .exceptions import WebRequestConnectError
 from .exceptions import WebRequestResponseStatusError
@@ -58,7 +60,6 @@ from .models import OrderState
 from .models import PlacedOrder
 from .models import Shop
 from .models import ShopOffer
-from .models import Token
 from .models import User
 from .permissions import UserOwnsShop
 from .schema import data_response_dict
@@ -91,8 +92,10 @@ from .services import check_email_verify_token
 from .services import check_password_reset_token
 from .services import checkout_basket
 from .services import edit_basket
+from .services import login_user
 from .services import reset_user_password
 from .services import retry_get_url
+from .services import serialize
 from .services import serialize_dict
 from .services import update_shop_pricing_yaml
 from .services import validate_request
@@ -367,17 +370,71 @@ class UserLoginView(APIView):
         credentials = validate_request(self.serializer_class, request)
 
         user = authenticate(cast(HttpRequest, request), **credentials)
-        if user is None:
+        if user is None or not isinstance(user, User):
             raise InvalidCredentialsError
-        if not user.is_active:
-            raise LoginInactiveError
 
-        token = Token.objects.create(user=user)
-        # Update last_login
-        user_logged_in.send(self, user=user)
+        token = login_user(user=user)
+        return Response(serialize(TokenSerializer, token))
 
-        serializer = TokenSerializer(token)
-        return Response(serializer.data)
+
+@extend_schema(
+    description=_(
+        'Exchange a successful Google OAuth2 session for a new API token.'
+    ),
+    responses={
+        **data_response_dict(TokenSerializer),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            LoginInactiveError,
+            THROTTLED_EXAMPLE,
+        ),
+    },
+)
+class SocialLoginSuccessView(APIView):
+    """View for exchanging a successful social session for an API token."""
+
+    serializer_class = TokenSerializer
+    authentication_classes = (SessionAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request: Request) -> Response:
+        """Create an API token and clear the temporary social session.
+
+        Args:
+            request (Request): Request authenticated by the social session.
+
+        Returns:
+            Response: Created API token response.
+        """
+        token = login_user(user=request.user)
+        # Prevent repeated token creation
+        logout(cast(HttpRequest, request))
+        return Response(serialize(TokenSerializer, token))
+
+
+@extend_schema(
+    description=_('Return a normalized social authentication error.'),
+    responses={
+        **data_response_dict(TokenSerializer),
+        **error_response_dict(SocialLoginError, THROTTLED_EXAMPLE),
+    },
+)
+class SocialLoginErrorView(APIView):
+    """View for returning normalized social authentication errors."""
+
+    def get(self, request: Request) -> Response:
+        """Raise a social login error from redirect query parameters.
+
+        Args:
+            request (Request): Request containing social error details.
+
+        Raises:
+            SocialLoginError: Always raised with query parameter details.
+        """
+        message = request.query_params.get('message')
+        backend = request.query_params.get('backend')
+        raise SocialLoginError(message, backend)
 
 
 @extend_schema(

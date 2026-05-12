@@ -18,6 +18,7 @@ from .exceptions import BasketCheckoutError
 from .exceptions import InvalidOrderStateTransitionError
 from .exceptions import InvalidParameterError
 from .exceptions import LoginError
+from .exceptions import LoginInactiveError
 from .exceptions import MissingIdsError
 from .exceptions import NotBasketCheckoutError
 from .exceptions import NotFoundError
@@ -38,6 +39,7 @@ class ExceptionInfo:
 EXCEPTION_REGISTRY: Final[dict[type[Exception], ExceptionInfo]] = {
     InvalidParameterError: ExceptionInfo(status.HTTP_400_BAD_REQUEST),
     LoginError: ExceptionInfo(status.HTTP_401_UNAUTHORIZED),
+    LoginInactiveError: ExceptionInfo(status.HTTP_403_FORBIDDEN),
     NotFoundError: ExceptionInfo(status.HTTP_404_NOT_FOUND),
     MissingIdsError: ExceptionInfo(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -192,10 +194,27 @@ def prepare_response_data(exc: Exception, response: Response) -> Response:
         Response: The response object with normalized data.
     """
     data = cast(dict[str, Any], response.data) or {}
-    for field in 'detail', 'code':
+    fields = get_exc_fields(exc)
+    for field in fields:
         add_response_field(exc, data, field)
     response.data = data
     return response
+
+
+def get_exc_fields(exc: Exception) -> list[str]:
+    """Return response fields exposed by an exception.
+
+    Args:
+        exc (Exception): Exception to inspect.
+
+    Returns:
+        list[str]: Response field names to copy from the exception.
+    """
+    fields = ['detail']
+    if extra_fields := getattr(exc, 'extra_fields', None):
+        fields += extra_fields
+    fields.append('code')
+    return fields
 
 
 def add_response_field(

@@ -11,4 +11,5 @@ class ApiConfig(AppConfig):
     @override
     def ready(self):
         """Run application startup logic when Django app is initialized."""
+        from . import pipeline  # noqa: F401, PLC0415
         from . import utils  # noqa: F401, PLC0415

@@ -20,6 +20,7 @@ from .models import Order
 from .models import OrderItem
 from .models import Shop
 from .models import ShopOffer
+from .models import Token
 from .models import User
 
 
@@ -266,19 +267,15 @@ class UserLoginSerializer(serializers.Serializer):
     password = PasswordField()
 
 
-@extend_schema_serializer(
-    examples=[
-        OpenApiExample(
-            name='Response',
-            value={'token': 'example_user_token'},
-            response_only=True,
-        ),
-    ],
-)
-class TokenSerializer(serializers.Serializer):
+class TokenSerializer(serializers.ModelSerializer):
     """Serializer for token response."""
 
-    token = serializers.CharField(source='key')
+    email = serializers.EmailField(source='user.email')
+    token = serializers.CharField(source='key', default='example_user_token')
+
+    class Meta:
+        model = Token
+        fields = ('email', 'token')
 
 
 class ContactSerializer(serializers.ModelSerializer):

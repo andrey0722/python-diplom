@@ -5,6 +5,7 @@ from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext import StrPromise
 from rest_framework.exceptions import Throttled
+from social_core.exceptions import AuthForbidden
 import yaml
 
 from .models import OrderState
@@ -77,8 +78,14 @@ class ApplicationError(Exception):
 
     default_detail = _('An application error occurred.')
     default_code = 'application_error'
+    extra_fields = ()
 
-    def __init__(self, detail: ErrorDetail = None, code: ErrorCode = None):
+    def __init__(
+        self,
+        detail: ErrorDetail = None,
+        code: ErrorCode = None,
+        **kwargs: object,
+    ):
         """Initialize an exception with detail and code.
 
         Args:
@@ -87,7 +94,9 @@ class ApplicationError(Exception):
         """
         self.detail = self.default_detail if detail is None else detail
         self.code = self.default_code if code is None else code
-        super().__init__(self.detail, self.code)
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+        super().__init__(self.detail, self.code, kwargs)
 
 
 class InvalidParameterError(ApplicationError):
@@ -116,6 +125,29 @@ class LoginInactiveError(LoginError):
 
     default_detail = _('User inactive or deleted.')
     default_code = 'login_inactive_error'
+
+
+class SocialLoginError(LoginError):
+    """Social authentication failed."""
+
+    default_detail = _('Social authentication failed.')
+    default_code = 'social_login_error'
+    extra_fields = ('backend',)
+
+    def __init__(
+        self,
+        detail: str | None = None,
+        backend: str | None = None,
+        code: ErrorCode = None,
+    ) -> None:
+        """Initialize the error with optional social backend context.
+
+        Args:
+            detail (str | None): Optional error detail override.
+            backend (str | None): Social authentication backend name.
+            code (ErrorCode): Optional error code override.
+        """
+        super().__init__(detail, code, backend=backend)
 
 
 class NotFoundError(ApplicationError):
@@ -270,3 +302,11 @@ class InvalidOrderStateTransitionError(ApplicationError):
 
 
 THROTTLED_EXAMPLE = Throttled(123)
+
+
+class UnverifiedEmailAuthError(AuthForbidden):
+    """Social authentication error for unverified email accounts."""
+
+    def __str__(self) -> str:
+        """Return the user-facing authentication error message."""
+        return str(_('Your email is not verified.'))

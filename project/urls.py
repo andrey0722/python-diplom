@@ -22,10 +22,13 @@ from django.urls import include
 from django.urls import path
 
 from .views import health_check
+from .views import social_login
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health-check/', health_check),
+    path('auth/social/<str:backend>/', social_login),
+    path('auth/', include('social_django.urls', namespace='social')),
     path('api/v1/', include('api.urls')),
 ]
 

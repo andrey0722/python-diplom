@@ -15,6 +15,8 @@ from .views import ShopOrdersListView
 from .views import ShopOrderView
 from .views import ShopStateView
 from .views import ShopUpdateView
+from .views import SocialLoginErrorView
+from .views import SocialLoginSuccessView
 from .views import UserContactsView
 from .views import UserInfoView
 from .views import UserLoginView
@@ -37,6 +39,8 @@ urlpatterns = [
         name='password-reset-confirm',
     ),
     path('user/login', UserLoginView.as_view()),
+    path('user/login/social/success', SocialLoginSuccessView.as_view()),
+    path('user/login/social/error', SocialLoginErrorView.as_view()),
     path('user/details', UserInfoView.as_view()),
     path('user/contact', UserContactsView.as_view()),
     path('partner/update', ShopUpdateView.as_view()),

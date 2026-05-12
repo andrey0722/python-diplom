@@ -4,7 +4,7 @@ Backend-приложение на Django REST Framework для автомати�
 
 ## Возможности
 
-- регистрация пользователей, подтверждение email, аутентификация по токену и сброс пароля;
+- регистрация пользователей, подтверждение email, аутентификация по токену, вход через Google OAuth2 и сброс пароля;
 - загрузка прайс-листов в формате YAML поставщика по URL (в режиме `DEBUG` доступна схема `file://` для локальных файлов);
 - валидация прайс-листа: уникальность категорий и товаров, корректность ссылок товара на категорию;
 - каталог магазинов, категорий и товарных предложений с фильтрацией, поиском и пагинацией;
@@ -27,6 +27,7 @@ Backend-приложение на Django REST Framework для автомати�
 - Celery для фоновой отправки email;
 - django-filter, django-environ, django-admin-extra-buttons;
 - drf-spectacular для OpenAPI-схемы, Swagger UI и ReDoc;
+- social-auth-app-django для входа через Google OAuth2;
 - Mailpit в dev-окружении для просмотра отправляемых писем и отладки;
 - Uvicorn ASGI server и Nginx reverse proxy.
 
@@ -76,6 +77,8 @@ cp .env.example .env
 | `EMAIL_URL` | Настройка email backend для отправки email. Закомментированные строки в `.env.example` являются альтернативными настройками. | `filemail:///email` |
 | `LISTEN_PORT` | Внешний порт Nginx proxy при Docker-запуске. | `8080` |
 | `SQL_TRACE` | Включает подробное логирование каждого выполняемого SQL-запроса в Django Database Backend и middleware со статистикой запросов. Полезно для отладки ORM и SQL-запросов. | `False` |
+| `GOOGLE_OAUTH2_CLIENT_ID` | Client ID OAuth-клиента Google. Используется для входа через `/auth/social/google-oauth2/`. | `example.apps.googleusercontent.com` |
+| `GOOGLE_OAUTH2_CLIENT_SECRET` | Client Secret того же OAuth-клиента Google. В production храните только в приватном окружении. | `EXAMPLE-CLIENT-SECRET` |
 
 Варианты `EMAIL_URL`:
 
@@ -145,6 +148,7 @@ python compose.py dev down
 - `DJANGO_SECRET_KEY` с уникальным секретом;
 - `DJANGO_ALLOWED_HOSTS` со списком реальных доменов или IP;
 - рабочий `EMAIL_URL`, ведущий на реальный SMTP-сервер, подходящий для массовой отправки email-сообщений;
+- реальные `GOOGLE_OAUTH2_CLIENT_ID` и `GOOGLE_OAUTH2_CLIENT_SECRET`, если используется вход через Google;
 - при необходимости `LISTEN_PORT`, `DB_*` и `REDIS_PASSWORD`.
 
 Минимальная команда, собирает образ, выполняет миграции, собирает static-файлы и запускает сервисы в фоне:
@@ -297,6 +301,40 @@ goods:
 ```http
 Authorization: Token <token>
 ```
+
+### Вход через Google OAuth2
+
+Для входа через Google используется `social-auth-app-django`.
+Пользователь начинает OAuth2 flow по URL `/auth/social/google-oauth2/`.
+После успешной авторизации Google возвращает пользователя на callback
+`/auth/complete/google-oauth2/`, приложение проверяет подтвержденный email
+Google-аккаунта и выдает обычный API-токен в формате:
+
+```json
+{
+  "email": "user@example.com",
+  "token": "<token>"
+}
+```
+
+Для подготовки OAuth-клиента в Google Cloud Console следуйте инструкции
+[Python Social Auth для Google OAuth2](https://python-social-auth.readthedocs.io/en/latest/backends/google.html#google-oauth2):
+
+1. Откройте Google Cloud Console и создайте новый проект либо выберите существующий.
+2. Перейдите в `APIs & Services` -> `Credentials`.
+3. Создайте `OAuth client ID` с типом приложения `Web application`.
+4. Добавьте redirect URI backend-а:
+   `http://127.0.0.1:8000/auth/complete/google-oauth2/` для локального запуска,
+   `http://127.0.0.1:8080/auth/complete/google-oauth2/` для Docker через Nginx
+   или `https://<your-domain>/auth/complete/google-oauth2/` для развернутого сервиса.
+5. Сохраните выданные `Client ID` и `Client Secret` в
+   `GOOGLE_OAUTH2_CLIENT_ID` и `GOOGLE_OAUTH2_CLIENT_SECRET`.
+6. Настройте OAuth consent screen: заполните название продукта и обязательные поля,
+   добавьте scopes `email`, `profile` и `openid`.
+
+Если social-auth возвращает ошибку, middleware перенаправляет ее на
+`/api/v1/user/login/social/error`, где API отвечает единым JSON-форматом с
+полями `detail`, `backend` и `code`.
 
 Все методы API реализованы совместимыми с предложенным API в формате Postman Collection:
 [netology-pd-diplom](https://documenter.getpostman.com/view/5037826/SVfJUrSc)
