@@ -23,8 +23,10 @@ from django.urls import path
 
 from .views import health_check
 from .views import social_login
+from .views import trigger_error
 
 urlpatterns = [
+    path('admin/trigger-error/', trigger_error),
     path('admin/', admin.site.urls),
     path('health-check/', health_check),
     path('auth/social/<str:backend>/', social_login),

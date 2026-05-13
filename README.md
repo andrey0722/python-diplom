@@ -16,6 +16,7 @@ Backend-приложение на Django REST Framework для автомати�
 - ограничение частоты API-запросов для анонимных и авторизованных пользователей, email-операций, входа и оформления заказов;
 - расширенная Django Admin: редактирование данных, оформление корзины, ограниченные переходы статусов заказа, защита активных заказов от некорректного редактирования;
 - email-уведомления через Celery: подтверждение email, сброс пароля, создание заказа, отмена заказа, смена статуса, уведомления администраторам магазинов;
+- мониторинг ошибок, логов и трассировок через Sentry;
 - окружение Docker Compose с backend, PostgreSQL, Redis, Celery, Nginx и Mailpit для разработки.
 
 ## Стек технологий
@@ -28,6 +29,7 @@ Backend-приложение на Django REST Framework для автомати�
 - django-filter, django-environ, django-admin-extra-buttons;
 - drf-spectacular для OpenAPI-схемы, Swagger UI и ReDoc;
 - social-auth-app-django для входа через Google OAuth2;
+- sentry-sdk для отправки ошибок, логов и трассировок в Sentry;
 - Mailpit в dev-окружении для просмотра отправляемых писем и отладки;
 - Uvicorn ASGI server и Nginx reverse proxy.
 
@@ -75,6 +77,7 @@ cp .env.example .env
 | `CELERY_BROKER_URL` | URL брокера Celery. В проекте используется Redis. | `redis://default:redis_password@127.0.0.1:6379/0` |
 | `CELERY_WORKER_CONCURRENCY` | Количество процессов или потоков worker-а Celery. Для dev=режима достаточно `1`. | `1` |
 | `EMAIL_URL` | Настройка email backend для отправки email. Закомментированные строки в `.env.example` являются альтернативными настройками. | `filemail:///email` |
+| `SENTRY_URL` | DSN проекта Sentry. Используется `sentry-sdk` для отправки ошибок, логов и tracing-транзакций. | `https://key@example.sentry.io/123456` |
 | `LISTEN_PORT` | Внешний порт Nginx proxy при Docker-запуске. | `8080` |
 | `SQL_TRACE` | Включает подробное логирование каждого выполняемого SQL-запроса в Django Database Backend и middleware со статистикой запросов. Полезно для отладки ORM и SQL-запросов. | `False` |
 | `GOOGLE_OAUTH2_CLIENT_ID` | Client ID OAuth-клиента Google. Используется для входа через `/auth/social/google-oauth2/`. | `example.apps.googleusercontent.com` |
@@ -148,6 +151,7 @@ python compose.py dev down
 - `DJANGO_SECRET_KEY` с уникальным секретом;
 - `DJANGO_ALLOWED_HOSTS` со списком реальных доменов или IP;
 - рабочий `EMAIL_URL`, ведущий на реальный SMTP-сервер, подходящий для массовой отправки email-сообщений;
+- реальный `SENTRY_URL`, если нужно отправлять ошибки и трассировки в Sentry;
 - реальные `GOOGLE_OAUTH2_CLIENT_ID` и `GOOGLE_OAUTH2_CLIENT_SECRET`, если используется вход через Google;
 - при необходимости `LISTEN_PORT`, `DB_*` и `REDIS_PASSWORD`.
 
@@ -516,6 +520,16 @@ curl -X POST http://127.0.0.1:8000/api/v1/partner/update \
 - у оформленных заказов нельзя напрямую менять позиции активного заказа;
 - форма заказа показывает только допустимые варианты для статуса заказа согласно диаграмме переходов выше;
 - при смене статуса заказа уведомления отправляются через Celery после успешного commit-а транзакции.
+
+## Sentry
+
+Проект инициализирует `sentry-sdk` при загрузке настроек Django. DSN задается переменной
+`SENTRY_URL`; по умолчанию в `.env.example` указано демонстрационное значение, которое нужно
+заменить на DSN реального проекта Sentry.
+
+Интеграция отправляет ошибки Django, логи и tracing-транзакции. Для проверки отправки ошибок
+есть staff-only URL `/admin/trigger-error/`: он доступен только авторизованным сотрудникам
+Django Admin и намеренно выбрасывает тестовую ошибку.
 
 ## Email и Celery
 

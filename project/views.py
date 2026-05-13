@@ -1,7 +1,24 @@
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import logout
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.shortcuts import redirect
+
+from .exceptions import SampleError
+
+
+@staff_member_required
+def trigger_error(request: HttpRequest) -> HttpResponse:  # noqa: ARG001
+    """Raise a sample error for staff-only error reporting checks.
+
+    Args:
+        request (HttpRequest): Incoming staff-only request.
+
+    Raises:
+        SampleError: Always raised to exercise error reporting.
+    """
+    raise SampleError
+    return HttpResponse('Sample error')
 
 
 def health_check(request: HttpRequest) -> HttpResponse:  # noqa: ARG001
