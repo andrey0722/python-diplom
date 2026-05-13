@@ -40,6 +40,8 @@ from .exceptions import InvalidCredentialsError
 from .exceptions import InvalidOrderStateTransitionError
 from .exceptions import LoginInactiveError
 from .exceptions import MissingIdsError
+from .exceptions import SessionAuthenticationFailed
+from .exceptions import SessionNotAuthenticated
 from .exceptions import SocialLoginError
 from .exceptions import TokenConfirmError
 from .exceptions import WebRequestConnectError
@@ -384,8 +386,8 @@ class UserLoginView(APIView):
     responses={
         **data_response_dict(TokenSerializer),
         **error_response_dict(
-            AuthenticationFailed,
-            NotAuthenticated,
+            SessionAuthenticationFailed,
+            SessionNotAuthenticated,
             LoginInactiveError,
             THROTTLED_EXAMPLE,
         ),
@@ -415,15 +417,12 @@ class SocialLoginSuccessView(APIView):
 
 @extend_schema(
     description=_('Return a normalized social authentication error.'),
-    responses={
-        **data_response_dict(TokenSerializer),
-        **error_response_dict(SocialLoginError, THROTTLED_EXAMPLE),
-    },
+    responses=error_response_dict(SocialLoginError),
 )
 class SocialLoginErrorView(APIView):
     """View for returning normalized social authentication errors."""
 
-    def get(self, request: Request) -> Response:
+    def get(self, request: Request) -> NoReturn:
         """Raise a social login error from redirect query parameters.
 
         Args:

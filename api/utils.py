@@ -18,11 +18,12 @@ from .exceptions import BasketCheckoutError
 from .exceptions import InvalidOrderStateTransitionError
 from .exceptions import InvalidParameterError
 from .exceptions import LoginError
-from .exceptions import LoginInactiveError
 from .exceptions import MissingIdsError
 from .exceptions import NotBasketCheckoutError
 from .exceptions import NotFoundError
 from .exceptions import ParsingError
+from .exceptions import SessionAuthenticationFailed
+from .exceptions import SessionNotAuthenticated
 from .exceptions import WebRequestError
 from .serializers import ApplicationErrorSerializer
 from .serializers import MissingIdsErrorSerializer
@@ -38,8 +39,7 @@ class ExceptionInfo:
 
 EXCEPTION_REGISTRY: Final[dict[type[Exception], ExceptionInfo]] = {
     InvalidParameterError: ExceptionInfo(status.HTTP_400_BAD_REQUEST),
-    LoginError: ExceptionInfo(status.HTTP_401_UNAUTHORIZED),
-    LoginInactiveError: ExceptionInfo(status.HTTP_403_FORBIDDEN),
+    LoginError: ExceptionInfo(status.HTTP_403_FORBIDDEN),
     NotFoundError: ExceptionInfo(status.HTTP_404_NOT_FOUND),
     MissingIdsError: ExceptionInfo(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -52,6 +52,8 @@ EXCEPTION_REGISTRY: Final[dict[type[Exception], ExceptionInfo]] = {
     InvalidOrderStateTransitionError: ExceptionInfo(
         status.HTTP_400_BAD_REQUEST
     ),
+    SessionAuthenticationFailed: ExceptionInfo(status.HTTP_403_FORBIDDEN),
+    SessionNotAuthenticated: ExceptionInfo(status.HTTP_403_FORBIDDEN),
     # DRF errors
     AuthenticationFailed: ExceptionInfo(AuthenticationFailed.status_code),
     NotAuthenticated: ExceptionInfo(NotAuthenticated.status_code),

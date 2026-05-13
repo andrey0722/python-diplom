@@ -9,6 +9,7 @@ from django.db import connection
 from django.db import reset_queries
 from django.http import HttpRequest
 from django.http import HttpResponse
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils.deprecation import MiddlewareMixin
 from social_core.exceptions import SocialAuthBaseException
@@ -91,7 +92,7 @@ class SocialAuthAPIExceptionMiddleware(SocialAuthExceptionMiddleware):
         self,
         request: HttpRequest,
         exception: Exception,
-    ) -> HttpResponse | None:
+    ) -> HttpResponseRedirect | None:
         """Redirect social-auth exceptions to the configured error URL.
 
         Args:
@@ -99,8 +100,8 @@ class SocialAuthAPIExceptionMiddleware(SocialAuthExceptionMiddleware):
             exception (Exception): Exception raised by social-auth.
 
         Returns:
-            HttpResponse | None: Redirect response for handled social-auth
-                errors, otherwise None.
+            HttpResponseRedirect | None: Redirect response for handled
+                social-auth errors, otherwise None.
         """
         strategy = getattr(request, 'social_strategy', None)
         if strategy is None or self.raise_exception(request, exception):

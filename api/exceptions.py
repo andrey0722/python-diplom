@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext import StrPromise
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import NotAuthenticated
 from rest_framework.exceptions import Throttled
 from social_core.exceptions import AuthForbidden
 import yaml
@@ -91,11 +93,15 @@ class ApplicationError(Exception):
         Args:
             detail (ErrorDetail): The error detail payload.
             code (ErrorCode): The error code.
+            **kwargs (object): Additional exception object fields.
         """
         self.detail = self.default_detail if detail is None else detail
         self.code = self.default_code if code is None else code
-        for name, value in kwargs.items():
-            setattr(self, name, value)
+        if kwargs:
+            self.extra_fields = []
+            for name, value in kwargs.items():
+                setattr(self, name, value)
+                self.extra_fields.append(name)
         super().__init__(self.detail, self.code, kwargs)
 
 
@@ -132,7 +138,6 @@ class SocialLoginError(LoginError):
 
     default_detail = _('Social authentication failed.')
     default_code = 'social_login_error'
-    extra_fields = ('backend',)
 
     def __init__(
         self,
@@ -299,6 +304,12 @@ class InvalidOrderStateTransitionError(ApplicationError):
             new=new,
         )
         super().__init__(detail, code)
+
+
+class SessionAuthenticationFailed(AuthenticationFailed): ...
+
+
+class SessionNotAuthenticated(NotAuthenticated): ...
 
 
 THROTTLED_EXAMPLE = Throttled(123)
