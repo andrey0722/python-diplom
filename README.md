@@ -14,6 +14,7 @@ Backend-приложение на Django REST Framework для автомати�
 - жизненный цикл заказа: `new`, `confirmed`, `assembled`, `sent`, `completed`, `cancelled`;
 - отдельные API-методы для поставщика: обновление прайса, включение или отключение приема заказов, просмотр заказов по своему магазину;
 - ограничение частоты API-запросов для анонимных и авторизованных пользователей, email-операций, входа и оформления заказов;
+- кэширование ORM-запросов через django-cachalot с использованием общего Django cache backend;
 - расширенная Django Admin: редактирование данных, оформление корзины, ограниченные переходы статусов заказа, защита активных заказов от некорректного редактирования;
 - email-уведомления через Celery: подтверждение email, сброс пароля, создание заказа, отмена заказа, смена статуса, уведомления администраторам магазинов;
 - мониторинг ошибок, логов и трассировок через Sentry;
@@ -26,7 +27,7 @@ Backend-приложение на Django REST Framework для автомати�
 - PostgreSQL для Docker-запуска, SQLite возможен для локальной разработки;
 - Redis в качестве брокера Celery и cache backend;
 - Celery для фоновой отправки email;
-- django-filter, django-environ, django-admin-extra-buttons;
+- django-filter, django-environ, django-admin-extra-buttons, django-cachalot;
 - drf-spectacular для OpenAPI-схемы, Swagger UI и ReDoc;
 - social-auth-app-django для входа через Google OAuth2;
 - sentry-sdk для отправки ошибок, логов и трассировок в Sentry;
@@ -73,7 +74,7 @@ cp .env.example .env
 | `DJANGO_DEBUG` | Включает режим разработки. В `True` доступен Debug Toolbar, подробные ответы и `file://` URL для импорта прайсов. | `True` |
 | `DJANGO_ALLOWED_HOSTS` | Список разрешенных host-имен через запятую. Для локальной разработки допустим `*`. | `localhost,127.0.0.1` |
 | `DATABASE_URL` | URL подключения к базе данных в формате `django-environ`. Для Docker backend получает внутренний PostgreSQL URL из Compose. | `postgres://user:password@127.0.0.1:5432/database` |
-| `CACHE_URL` | URL Django cache в формате `django-environ`. Используется DRF throttling для хранения счетчиков запросов. Закомментированный `filecache://.cache` подходит для простого локального запуска. | `redis://default:redis_password@127.0.0.1:6379/1` |
+| `CACHE_URL` | URL Django cache в формате `django-environ`. Используется DRF throttling для счетчиков запросов и django-cachalot для кэширования ORM-запросов. Закомментированный `filecache://.cache` подходит для простого локального запуска. | `redis://default:redis_password@127.0.0.1:6379/1` |
 | `CELERY_BROKER_URL` | URL брокера Celery. В проекте используется Redis. | `redis://default:redis_password@127.0.0.1:6379/0` |
 | `CELERY_WORKER_CONCURRENCY` | Количество процессов или потоков worker-а Celery. Для dev=режима достаточно `1`. | `1` |
 | `EMAIL_URL` | Настройка email backend для отправки email. Закомментированные строки в `.env.example` являются альтернативными настройками. | `filemail:///email` |
@@ -184,7 +185,8 @@ python compose.py prod logs
 консольную почту `consolemail://` или dummy-заглушку `dummymail://`.
 Redis должен быть доступен по `CELERY_BROKER_URL`: Celery-приложение проверяет подключение к брокеру при инициализации.
 Для `CACHE_URL` в локальной разработке можно использовать Redis либо файловый cache `filecache://.cache`;
-для нескольких процессов backend-а предпочтителен общий Redis cache, чтобы лимиты запросов применялись согласованно.
+для нескольких процессов backend-а предпочтителен общий Redis cache, чтобы лимиты запросов и кэш ORM-запросов
+применялись согласованно.
 
 1. Создайте виртуальное окружение и установите зависимости:
 
@@ -364,6 +366,11 @@ Swagger UI и ReDoc используют локальные static-ресурс�
 Если лимит частоты запросов превышен, API возвращает HTTP `429 Too Many Requests`
 с кодом ошибки `throttled`. Счетчики throttling хранятся в Django cache, поэтому
 для стабильной работы лимитов в Docker используется Redis database `1`.
+
+В тот же Django cache backend подключен `django-cachalot`: он кэширует результаты
+ORM-запросов и автоматически инвалидирует их при изменении связанных таблиц. В режиме
+`DJANGO_DEBUG=True` Django Debug Toolbar показывает отдельную панель Cachalot для
+проверки попаданий в кэш.
 
 Настроенные лимиты:
 

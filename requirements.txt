@@ -1,5 +1,6 @@
 celery~=5.6.3
 django~=6.0.3
+django-cachalot~=2.9.0
 django-environ~=0.13.0
 django-admin-extra-buttons~=2.1.2
 django-debug-toolbar~=6.3.0
