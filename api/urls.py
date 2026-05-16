@@ -17,6 +17,7 @@ from .views import ShopStateView
 from .views import ShopUpdateView
 from .views import SocialLoginErrorView
 from .views import SocialLoginSuccessView
+from .views import UserAvatarView
 from .views import UserContactsView
 from .views import UserInfoView
 from .views import UserLoginView
@@ -42,6 +43,7 @@ urlpatterns = [
     path('user/login/social/success', SocialLoginSuccessView.as_view()),
     path('user/login/social/error', SocialLoginErrorView.as_view()),
     path('user/details', UserInfoView.as_view()),
+    path('user/avatar', UserAvatarView.as_view()),
     path('user/contact', UserContactsView.as_view()),
     path('partner/update', ShopUpdateView.as_view()),
     path('partner/state', ShopStateView.as_view()),

@@ -5,6 +5,7 @@ Backend-приложение на Django REST Framework для автомати�
 ## Возможности
 
 - регистрация пользователей, подтверждение email, аутентификация по токену, вход через Google OAuth2 и сброс пароля;
+- загрузка аватаров пользователей с автоматической генерацией миниатюр;
 - загрузка прайс-листов в формате YAML поставщика по URL (в режиме `DEBUG` доступна схема `file://` для локальных файлов);
 - валидация прайс-листа: уникальность категорий и товаров, корректность ссылок товара на категорию;
 - каталог магазинов, категорий и товарных предложений с фильтрацией, поиском и пагинацией;
@@ -27,7 +28,7 @@ Backend-приложение на Django REST Framework для автомати�
 - PostgreSQL для Docker-запуска, SQLite возможен для локальной разработки;
 - Redis в качестве брокера Celery и cache backend;
 - Celery для фоновой отправки email;
-- django-filter, django-environ, django-admin-extra-buttons, django-cachalot;
+- django-filter, django-environ, django-admin-extra-buttons, django-cachalot, easy-thumbnails;
 - drf-spectacular для OpenAPI-схемы, Swagger UI и ReDoc;
 - social-auth-app-django для входа через Google OAuth2;
 - sentry-sdk для отправки ошибок, логов и трассировок в Sentry;
@@ -42,6 +43,7 @@ api/templates/api/       TXT/HTML email-шаблоны
 api/management/commands/ Команда manage.py celery для dev-worker с autoreload
 api/schema.py            OpenAPI-настройки и helper-функции для схемы ответов
 api/throttling.py        Расширенные DRF throttle-классы для лимитов запросов
+api/thumbnails.py        Helper-функции для аватаров, thumbnail URL и фоновой обработки изображений
 project/                Настройки Django, URLconf, ASGI/WSGI, Celery app, health-check
 shop_data/              Примеры YAML-прайсов и некорректные файлы для проверки валидации
 compose.py              Обертка над Docker Compose командами для dev/prod окружений
@@ -387,6 +389,20 @@ ORM-запросов и автоматически инвалидирует их
 Для методов API, возвращающих списки элементов, доступна пагинация limit-offset. Чтобы её активировать,
 необходимо передать дополнительные query-параметры `limit` и `offset`.
 
+### Аватары пользователей
+
+Аватар можно передать при регистрации пользователя в поле `avatar_upload` или загрузить позднее через
+`POST /api/v1/user/avatar`. Запрос должен быть `multipart/form-data`; поддерживаются файлы
+`jpg`, `jpeg`, `png` и `webp` размером до 5 MiB.
+
+После загрузки исходный файл сохраняется в `MEDIA_ROOT`, а Celery-задача генерирует миниатюры через
+`easy-thumbnails`: `small` 64x64, `medium` 256x256 и `large` 512x512. Пока миниатюры не готовы,
+поля `small`, `medium` и `large` могут быть `null`; поле `original` содержит URL исходного изображения.
+При замене аватара старый файл и его миниатюры удаляются фоновой задачей.
+
+В Docker media-файлы хранятся в volume `user-data`; в dev-конфигурации используется локальная папка
+`./media`, а Nginx раздает файлы по `/media/`.
+
 ### Пользователь
 
 | Метод | URL | Назначение |
@@ -399,6 +415,8 @@ ORM-запросов и автоматически инвалидирует их
 | `POST` | `/api/v1/user/login` | Вход и получение API-токена для доступа к защищённым методам API. |
 | `GET` | `/api/v1/user/details` | Получение данных текущего пользователя. |
 | `POST` | `/api/v1/user/details` | Частичное обновление данных текущего пользователя. |
+| `GET` | `/api/v1/user/avatar` | Получение URL аватара текущего пользователя и его миниатюр. |
+| `POST` | `/api/v1/user/avatar` | Загрузка или замена аватара текущего пользователя через multipart-поле `avatar_upload`. |
 | `GET` | `/api/v1/user/contact` | Список контактов пользователя. |
 | `POST` | `/api/v1/user/contact` | Создание контакта доставки. |
 | `PUT` | `/api/v1/user/contact` | Изменение контакта по `id` в теле запроса. |
@@ -545,6 +563,8 @@ Django Admin и намеренно выбрасывает тестовую ош�
 
 Celery-задачи:
 
+- `generate_user_avatar_thumbnails`;
+- `delete_avatar_with_thumbnails`;
 - `send_user_verification_mail`;
 - `send_password_reset_mail`;
 - `notify_order_state`.

@@ -2,17 +2,20 @@ import asyncio
 from collections.abc import Callable
 from collections.abc import Iterable
 from dataclasses import Field
+from dataclasses import astuple
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
 import enum
 import functools
+from io import BytesIO
 import json
 from pathlib import Path
 import random
 import re
 from types import CoroutineType
-from typing import Any, ClassVar, Protocol, cast, override
+from typing import Any, BinaryIO, ClassVar, Protocol, Self, cast, override
+from urllib.parse import urlparse
 
 from faker import Faker
 import httpx
@@ -47,6 +50,17 @@ class PersonSex(enum.StrEnum):
     MALE = enum.auto()
     FEMALE = enum.auto()
 
+    @classmethod
+    def random(cls) -> Self:
+        """Return a random person sex value."""
+        return random.choice(cls.list())
+
+    @classmethod
+    @functools.cache
+    def list(cls) -> list[Self]:
+        """Return all person sex values."""
+        return list(cls)
+
 
 class PersonGenerator:
     """Generator for personal data with fixed sex."""
@@ -64,8 +78,9 @@ class PersonGenerator:
         """
         self.faker = faker
         if sex is None:
-            sex = random.choice(list(PersonSex))
-        match sex:
+            sex = PersonSex.random()
+        self.sex = sex
+        match self.sex:
             case PersonSex.MALE:
                 self.first_name = faker.first_name_male
                 self.middle_name = faker.middle_name_male
@@ -217,6 +232,7 @@ class UserData(DataclassBase):
         """Populate missing user data fields after initialization."""
         # Use the same gender for generating the missing fields
         person_gen = person_gen_factory()
+        self.sex = person_gen.sex
         self.generate_field('first_name', person_gen.first_name)
         self.generate_field('last_name', person_gen.last_name)
         self.generate_field('position', person_gen.job)
@@ -259,6 +275,15 @@ class ContactData(DataclassBase):
             middle_name=None,
             last_name=None,
         )
+
+
+@dataclass
+class AvatarData(DataclassBase):
+    """Dataclass for user avatar upload data."""
+
+    file_name: str
+    file: BinaryIO
+    content_type: str = 'application/octet-stream'
 
 
 def auth_header(user_token: str) -> dict[str, str]:
@@ -330,6 +355,14 @@ def test_error(
 
 
 def get_throttle_wait_seconds(response: httpx.Response) -> int | None:
+    """Return the retry delay from a throttled API response.
+
+    Args:
+        response (httpx.Response): Response returned by the API.
+
+    Returns:
+        int | None: Suggested wait in seconds, or None if not throttled.
+    """
     if not test_error(response, httpx.codes.TOO_MANY_REQUESTS, 'throttled'):
         return None
     data = response.json()
@@ -366,18 +399,100 @@ def fail_if_error(response: httpx.Response) -> None:
         raise
 
 
-async def register_user(session: httpx.AsyncClient, user: UserData) -> bool:
+AVATAR_CACHE: dict[str, AvatarData] = {}
+
+
+async def load_avatar(session: httpx.AsyncClient, url: str) -> AvatarData:
+    """Download and cache avatar data from a URL.
+
+    Args:
+        session (httpx.AsyncClient): HTTP client to use for requests.
+        url (str): Avatar image URL.
+
+    Returns:
+        AvatarData: Downloaded avatar upload data.
+    """
+    response = await session.get(url)
+    fail_if_error(response)
+
+    filename = Path(urlparse(url).path).name
+    file = BytesIO(response.content)
+    content_type = response.headers['content-type']
+    avatar = AvatarData(filename, file, content_type)
+    AVATAR_CACHE[url] = avatar
+    return avatar
+
+
+async def get_avatar(session: httpx.AsyncClient, url: str) -> AvatarData:
+    """Return cached avatar data or download it.
+
+    Args:
+        session (httpx.AsyncClient): HTTP client to use for requests.
+        url (str): Avatar image URL.
+
+    Returns:
+        AvatarData: Avatar upload data.
+    """
+    try:
+        avatar = AVATAR_CACHE[url]
+    except KeyError:
+        avatar = await load_avatar(session, url)
+    return avatar
+
+
+async def get_fake_avatar(
+    session: httpx.AsyncClient,
+    sex: PersonSex | None = None,
+) -> AvatarData:
+    """Fetch a random avatar matching the requested sex.
+
+    Args:
+        session (httpx.AsyncClient): HTTP client to use for requests.
+        sex (PersonSex | None): Optional sex filter for the avatar.
+
+    Returns:
+        AvatarData: Avatar upload data.
+    """
+    if sex is None:
+        sex = PersonSex.random()
+    params = {'results': 1, 'gender': sex, 'inc': 'picture', 'noinfo': True}
+
+    avatar_url = None
+    while not avatar_url:
+        response = await session.get(
+            'https://randomuser.me/api/', params=params
+        )
+        fail_if_error(response)
+
+        json: dict[str, Any] = response.json()
+        results = json['results']
+        avatar_url = results and results[0]['picture']['large']
+
+    return await get_avatar(session, avatar_url)
+
+
+async def register_user(
+    session: httpx.AsyncClient,
+    user: UserData,
+    avatar: AvatarData | None = None,
+) -> bool:
     """Register a new user via the API if they do not already exist.
 
     Args:
         session (httpx.AsyncClient): HTTP client to use for requests.
         user (UserData): User data for registration.
+        avatar (AvatarData | None): Optional user avatar to upload.
 
     Returns:
         bool: True if the user was created, False if the user already exists.
     """
     data = user.filter_fields(UserData)
-    response = await session.post(f'{API_ROOT}/user/register', data=data)
+    files = {'avatar_upload': astuple(avatar)} if avatar else None
+    response = await session.post(
+        f'{API_ROOT}/user/register',
+        data=data,
+        files=files,
+    )
     if not response.is_success:
         if response.status_code == httpx.codes.BAD_REQUEST:
             json: dict[str, Any] = response.json()
@@ -706,7 +821,8 @@ async def create_user(session: httpx.AsyncClient, user: UserData) -> str:
     Returns:
         str: API authentication token.
     """
-    if await register_user(session, user):
+    avatar = await get_fake_avatar(session, user.sex)
+    if await register_user(session, user, avatar):
         await verify_email(session, user.email)
     return await login(session, user)
 
@@ -1000,8 +1116,27 @@ async def make_orders(session: httpx.AsyncClient, tokens: list[str]) -> None:
 def retry_throttling[**P, T: httpx.Response](
     func: Callable[P, CoroutineType[Any, Any, T]],
 ) -> Callable[P, CoroutineType[Any, Any, T]]:
+    """Retry an async request function after API throttling responses.
+
+    Args:
+        func (Callable[P, CoroutineType[Any, Any, T]]): Request function
+            returning an HTTP response coroutine.
+
+    Returns:
+        Callable[P, CoroutineType[Any, Any, T]]: Wrapped request function.
+    """
+
     @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> T:
+        """Call the request coroutine until it is not throttled.
+
+        Args:
+            *args (Any): Positional request arguments.
+            **kwargs (Any): Keyword request arguments.
+
+        Returns:
+            T: Non-throttled HTTP response.
+        """
         while True:
             response = await func(*args, **kwargs)
             if seconds := get_throttle_wait_seconds(response):
@@ -1016,8 +1151,27 @@ def retry_throttling[**P, T: httpx.Response](
 def retry_request_error[**P, T](
     func: Callable[P, CoroutineType[Any, Any, T]],
 ) -> Callable[P, CoroutineType[Any, Any, T]]:
+    """Retry an async function after transient request errors.
+
+    Args:
+        func (Callable[P, CoroutineType[Any, Any, T]]): Function to retry.
+
+    Returns:
+        Callable[P, CoroutineType[Any, Any, T]]: Wrapped function with retry
+            handling.
+    """
+
     @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> T:
+        """Call the wrapped coroutine until success or retry exhaustion.
+
+        Args:
+            *args (Any): Positional function arguments.
+            **kwargs (Any): Keyword function arguments.
+
+        Returns:
+            T: Wrapped function result.
+        """
         retries = 10
         fail_count = 0
         while True:

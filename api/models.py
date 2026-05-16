@@ -1,8 +1,10 @@
 from collections.abc import Callable
 import functools
+from pathlib import Path
 import random
 import time
 from typing import TYPE_CHECKING, Any, Final, override
+from uuid import uuid4
 
 from django.contrib import admin
 from django.contrib.auth.models import AbstractBaseUser
@@ -19,6 +21,7 @@ from django.db.models import Q
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
+from easy_thumbnails.fields import ThumbnailerImageField
 from model_utils.managers import QueryManager
 from phonenumber_field.modelfields import PhoneNumberField
 from psycopg2.errorcodes import DEADLOCK_DETECTED
@@ -126,6 +129,20 @@ class UserManager(BaseUserManager):
 type AnyUser = AbstractBaseUser | AnonymousUser
 
 
+def user_avatar_upload_to(instance: 'User', filename: str) -> str:
+    """Build the storage path for an uploaded user avatar.
+
+    Args:
+        instance (User): User instance receiving the avatar.
+        filename (str): Original uploaded file name.
+
+    Returns:
+        str: Storage path for the avatar file.
+    """
+    ext = Path(filename).suffix.lower()
+    return f'users/avatars/{instance.pk or "new"}/{uuid4().hex}{ext}'
+
+
 class User(AbstractUser):
     """Customized user model."""
 
@@ -137,6 +154,18 @@ class User(AbstractUser):
     email = models.EmailField(_('email address'), unique=True)
     company = models.CharField(_('company'), max_length=50, blank=True)
     position = models.CharField(_('position'), max_length=50, blank=True)
+
+    avatar = ThumbnailerImageField(
+        upload_to=user_avatar_upload_to,
+        blank=True,
+        null=True,
+        verbose_name=_('avatar'),
+    )
+    avatar_thumbnails_ready = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name=_('avatar thumbnails ready'),
+    )
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
         ordering = ('pk',)

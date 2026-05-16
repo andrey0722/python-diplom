@@ -3,14 +3,18 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import functools
 import logging
-from typing import Final, cast
+from typing import Final, cast, overload
 
 from celery import shared_task
 from celery.contrib.django.task import DjangoTask
+from django.core.files.storage import default_storage
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Prefetch
 from django.template.loader import render_to_string
+from easy_thumbnails.files import generate_all_aliases
+from easy_thumbnails.models import Source
+from easy_thumbnails.models import Thumbnail
 
 from .models import Order
 from .models import OrderItem
@@ -25,10 +29,115 @@ from .templates import get_shops_and_context
 logger = logging.getLogger(__name__)
 
 
-def shared_task_wrapper[**P, T](func: Callable[P, T]) -> DjangoTask:
+class DjangoTaskT[**P, T](DjangoTask):
+    """Typed Celery Django task protocol used by local task wrappers."""
+
+    def delay(self, *args: P.args, **kwargs: P.kwargs) -> T: ...
+    def delay_on_commit(self, *args: P.args, **kwargs: P.kwargs) -> None: ...
+
+
+type DjangoTaskDecorator[**P, T] = Callable[
+    [Callable[P, T]], DjangoTaskT[P, T]
+]
+
+
+@overload
+def shared_task_wrapper[**P, T](
+    func: Callable[P, T],
+    /,
+    **kwargs: object,
+) -> DjangoTaskT[P, T]: ...
+
+
+@overload
+def shared_task_wrapper[**P, T](
+    **kwargs: object,
+) -> DjangoTaskDecorator[P, T]: ...
+
+
+def shared_task_wrapper[**P, T](
+    func: Callable[P, T] | None = None,
+    /,
+    **kwargs: object,
+) -> DjangoTaskT[P, T] | DjangoTaskDecorator[P, T]:
     """Helper decorator for correct celery task typing."""
-    decorated = shared_task(func)
-    return cast(DjangoTask, decorated)
+
+    def decorator(func: Callable[P, T]) -> DjangoTaskT[P, T]:
+        """Wrap a function as a typed shared task.
+
+        Args:
+            func (Callable[P, T]): Function to register as a Celery task.
+
+        Returns:
+            DjangoTaskT[P, T]: Registered Celery task object.
+        """
+        real_decorator = shared_task(**kwargs) if kwargs else shared_task
+        real_decorator = functools.wraps(func)(real_decorator)
+        return real_decorator(func)
+
+    return decorator if func is None else decorator(func)
+
+
+@shared_task_wrapper
+def generate_user_avatar_thumbnails(user_id: int, avatar_name: str) -> None:
+    """Generate thumbnails for a user's current avatar.
+
+    Args:
+        user_id (int): User primary key.
+        avatar_name (str): Avatar name expected when the task runs.
+    """
+    user = User.objects.get(pk=user_id)
+    if not user.avatar:
+        return
+
+    if user.avatar.name != avatar_name:
+        logger.info(
+            'Skipping thumbnail generation for user %s: '
+            'avatar changed from %r to %r',
+            user_id,
+            avatar_name,
+            user.avatar.name,
+        )
+        return
+
+    generate_all_aliases(user.avatar, include_global=False)
+    User.objects.filter(pk=user_id, avatar=avatar_name).update(
+        avatar_thumbnails_ready=True
+    )
+
+
+@shared_task_wrapper
+def delete_avatar_with_thumbnails(avatar_name: str) -> None:
+    """Delete an avatar file and its generated thumbnails.
+
+    Args:
+        avatar_name (str): Stored avatar file name to delete.
+    """
+    if not avatar_name:
+        return
+
+    sources = Source.objects.filter(name=avatar_name)
+    thumbnails = Thumbnail.objects.filter(source__in=sources)
+
+    file_names: list[str] = list(thumbnails.values_list('name', flat=True))
+    file_names.append(avatar_name)
+
+    for file_name in file_names:
+        try:
+            if default_storage.exists(file_name):
+                default_storage.delete(file_name)
+        except Exception:
+            logger.exception('Failed to delete file %r', file_name)
+
+    thumbnails_count, _ = thumbnails.delete()
+    sources_count, _ = sources.delete()
+
+    logger.info(
+        'Deleted avatar %r with %s thumbnails and %s sources',
+        avatar_name,
+        thumbnails_count,
+        sources_count,
+    )
 
 
 @shared_task_wrapper

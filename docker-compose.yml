@@ -6,6 +6,8 @@ x-backend-service: &backend-service
   env_file:
     - path: .env
       required: false
+  volumes:
+    - user-data:/project/media
 
 x-db-env: &db-env
   POSTGRES_DB: ${DB_NAME:-db}
@@ -152,6 +154,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
       - static-data:/static:ro
+      - user-data:/media:ro
     networks:
       - frontend
     ports:
@@ -165,6 +168,7 @@ services:
 
 volumes:
   static-data:
+  user-data:
   db-data:
   redis-data:
 

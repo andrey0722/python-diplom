@@ -27,6 +27,7 @@ from rest_framework.generics import RetrieveDestroyAPIView
 from rest_framework.generics import UpdateAPIView
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.mixins import UpdateModelMixin
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -69,6 +70,7 @@ from .schema import error_response_dict
 from .schema import message_response_dict
 from .schema import validation_response_dict
 from .serializers import AddToBasketSerializer
+from .serializers import AvatarSerializer
 from .serializers import CategorySerializer
 from .serializers import ContactSerializer
 from .serializers import EditBasketSerializer
@@ -476,6 +478,29 @@ class UserInfoView(RetrieveAPIView, UpdateModelMixin):
             Response: Updated user information.
         """
         return self.partial_update(request)
+
+
+@extend_schema(
+    description=_('Get the current user avatar.'),
+    responses={
+        **data_response_dict(AvatarSerializer),
+        **error_response_dict(
+            AuthenticationFailed,
+            NotAuthenticated,
+            THROTTLED_EXAMPLE,
+        ),
+    },
+)
+@extend_schema_view(
+    post=extend_schema(
+        description=_('Update the current user avatar.'),
+    ),
+)
+class UserAvatarView(UserInfoView):
+    """View for retrieving and updating the current user's avatar."""
+
+    serializer_class = AvatarSerializer
+    parser_classes = (MultiPartParser,)
 
 
 @extend_schema(

@@ -5,6 +5,7 @@ services:
   backend:
     volumes:
       - static-data:/project/static
+      - ./media:/project/media
     ports:
       - 8000:8000
     depends_on:
@@ -44,6 +45,8 @@ services:
   celery:
     environment:
       <<: *email-env
+    volumes:
+      - ./media:/project/media
     depends_on:
       migrate:
         condition: service_completed_successfully

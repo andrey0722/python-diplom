@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_spectacular',
     'drf_spectacular_sidecar',
+    'easy_thumbnails',
     'phonenumber_field',
     'rest_framework',
     'social_django',
@@ -309,6 +310,7 @@ SPECTACULAR_SETTINGS = {
     'SWAGGER_UI_DIST': 'SIDECAR',
     'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
     'REDOC_DIST': 'SIDECAR',
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 WSGI_APPLICATION = 'project.wsgi.application'
@@ -434,6 +436,40 @@ STATIC_ROOT = env.path(
     'STATIC_ROOT',
     default=BASE_DIR / STATIC_URL,  # pyright: ignore[reportArgumentType]
 )
+
+# User-uploaded files
+# https://docs.djangoproject.com/en/6.0/topics/files/
+
+MEDIA_URL = 'media/'
+MEDIA_ROOT = env.path(
+    'MEDIA_ROOT',
+    default=BASE_DIR / MEDIA_URL,  # pyright: ignore[reportArgumentType]
+)
+
+# easy-thumbnails settings
+# https://easy-thumbnails.readthedocs.io/en/latest/ref/settings/
+
+THUMBNAIL_ALIASES = {
+    'api.User.avatar': {
+        'avatar_small': {
+            'size': (64, 64),
+            'crop': True,
+            'quality': 85,
+        },
+        'avatar_medium': {
+            'size': (256, 256),
+            'crop': True,
+            'quality': 90,
+        },
+        'avatar_large': {
+            'size': (512, 512),
+            'crop': True,
+            'quality': 90,
+        },
+    },
+}
+
+MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MiB
 
 
 # Sentry console settings

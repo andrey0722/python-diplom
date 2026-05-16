@@ -4,8 +4,12 @@ from typing import Any, cast, override
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.core.files.uploadedfile import UploadedFile
+from django.core.validators import FileExtensionValidator
 from django.core.validators import URLValidator
+from django.db import transaction
 from django.db.models import QuerySet
+from django.db.models.fields.files import ImageFieldFile
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample
@@ -22,6 +26,10 @@ from .models import Shop
 from .models import ShopOffer
 from .models import Token
 from .models import User
+from .thumbnails import AvatarSize
+from .thumbnails import get_avatar_thumbnail
+from .thumbnails import get_user_avatar
+from .thumbnails import process_user_avatar_updated
 
 
 @extend_schema_field(OpenApiTypes.PASSWORD)
@@ -113,26 +121,186 @@ TEST_USER_EXAMPLE = OpenApiExample(
 )
 
 
-@extend_schema_serializer(
-    examples=[
-        OpenApiExample(
-            name='Example',
-            value={
-                'email': 'user@example.com',
-                'password': 'password',
-                'first_name': 'Ted',
-                'last_name': 'Bundy',
-                'company': 'Big company',
-                'position': 'Cool job',
-            },
+@extend_schema_field(OpenApiTypes.BINARY)
+class AvatarUploadField(serializers.ImageField):
+    """Image upload field for user avatars."""
+
+    default_error_messages = {
+        'max_size': _('File size exceeds maximum supported size {max}')
+    }
+    default_validators = (
+        FileExtensionValidator(
+            allowed_extensions=['jpg', 'jpeg', 'png', 'webp'],
         ),
-        TEST_USER_EXAMPLE,
-    ],
-)
+    )
+
+    @override
+    def to_internal_value(self, data: Any) -> UploadedFile:
+        """Validate and return an uploaded avatar file.
+
+        Args:
+            data (Any): Raw upload data received by the serializer.
+
+        Returns:
+            UploadedFile: Validated uploaded file.
+        """
+        value = cast(UploadedFile, super().to_internal_value(data))
+        max_size = settings.MAX_AVATAR_SIZE
+        if value.size > max_size:
+            self.fail('max_size', max=max_size)
+        return value
+
+
+class ImageMethodField(serializers.ImageField):
+    """Read-only image field populated by a serializer method."""
+
+    def __init__(
+        self,
+        method_name: str | None = None,
+        **kwargs: object,
+    ) -> None:
+        """Initialize a read-only method-backed image field.
+
+        Args:
+            method_name (str | None): Serializer method used for the value.
+            **kwargs (object): Additional image field options.
+        """
+        self.method_name = method_name
+        kwargs['source'] = '*'
+        kwargs['read_only'] = True
+        super().__init__(**kwargs)
+
+    @override
+    def bind(self, field_name: str, parent: serializers.Field) -> None:
+        """Bind the field and infer the serializer method name if needed.
+
+        Args:
+            field_name (str): Name of the field on the serializer.
+            parent (serializers.Field): Parent serializer field object.
+        """
+        if self.method_name is None:
+            self.method_name = f'get_{field_name}'
+        super().bind(field_name, parent)
+
+    @override
+    def to_representation(self, value: Any) -> Any:
+        """Return the image representation from the configured method.
+
+        Args:
+            value (Any): Serializer object passed to the method.
+
+        Returns:
+            Any: Image representation produced by the base field.
+        """
+        assert self.method_name is not None
+        method = getattr(self.parent, self.method_name)
+        value = method(value)
+        return super().to_representation(value)
+
+
+class AvatarSerializer(serializers.Serializer):
+    """Serializer for avatar upload and thumbnail URLs."""
+
+    avatar_upload = AvatarUploadField(write_only=True)
+
+    original = ImageMethodField(use_url=True)
+    small = ImageMethodField(use_url=True)
+    medium = ImageMethodField(use_url=True)
+    large = ImageMethodField(use_url=True)
+
+    @transaction.atomic
+    @override
+    def update(
+        self,
+        instance: User | ImageFieldFile,
+        validated_data: dict[str, Any],
+    ) -> User:
+        """Replace a user's avatar and schedule thumbnail processing.
+
+        Args:
+            instance (User | ImageFieldFile): User receiving the new avatar.
+            validated_data (dict[str, Any]): Validated avatar upload data.
+
+        Returns:
+            User: Updated user instance.
+        """
+        assert isinstance(instance, User)
+
+        old_avatar = get_user_avatar(instance)
+        new_avatar = validated_data['avatar_upload']
+
+        instance.avatar = new_avatar
+        instance.avatar_thumbnails_ready = False
+        instance.save(update_fields=['avatar', 'avatar_thumbnails_ready'])
+        process_user_avatar_updated(instance, old_avatar)
+
+        return instance
+
+    def get_original(self, obj: User | ImageFieldFile) -> ImageFieldFile:
+        """Return the original avatar image.
+
+        Args:
+            obj (User | ImageFieldFile): User or direct avatar file.
+
+        Returns:
+            ImageFieldFile: Original avatar file.
+        """
+        return obj.avatar if isinstance(obj, User) else obj
+
+    def get_small(self, obj: User | ImageFieldFile) -> ImageFieldFile | None:
+        """Return the small avatar thumbnail.
+
+        Args:
+            obj (User | ImageFieldFile): User or direct avatar file.
+
+        Returns:
+            ImageFieldFile | None: Small thumbnail file, if available.
+        """
+        return self._get_thumbnail(obj, AvatarSize.SMALL)
+
+    def get_medium(self, obj: User | ImageFieldFile) -> ImageFieldFile | None:
+        """Return the medium avatar thumbnail.
+
+        Args:
+            obj (User | ImageFieldFile): User or direct avatar file.
+
+        Returns:
+            ImageFieldFile | None: Medium thumbnail file, if available.
+        """
+        return self._get_thumbnail(obj, AvatarSize.MEDIUM)
+
+    def get_large(self, obj: User | ImageFieldFile) -> ImageFieldFile | None:
+        """Return the large avatar thumbnail.
+
+        Args:
+            obj (User | ImageFieldFile): User or direct avatar file.
+
+        Returns:
+            ImageFieldFile | None: Large thumbnail file, if available.
+        """
+        return self._get_thumbnail(obj, AvatarSize.LARGE)
+
+    def _get_thumbnail(
+        self,
+        obj: User | ImageFieldFile,
+        size: AvatarSize,
+    ) -> ImageFieldFile | None:
+        if isinstance(obj, User):
+            if not obj.avatar_thumbnails_ready:
+                return None
+            avatar = obj.avatar
+        else:
+            avatar = obj
+        return get_avatar_thumbnail(avatar, size)
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model with password handling."""
 
     password = PasswordField(write_only=True)
+    avatar = AvatarSerializer(read_only=True)
+
+    avatar_upload = AvatarUploadField(write_only=True)
 
     class Meta:
         model = User
@@ -145,12 +313,15 @@ class UserSerializer(serializers.ModelSerializer):
             'last_name',
             'company',
             'position',
+            'avatar',
+            'avatar_upload',
         )
         read_only_fields = [
             'id',
             'is_active',
         ]
 
+    @transaction.atomic
     @override
     def create(self, validated_data: dict[str, Any]):
         """Create user and hash a password.
@@ -162,12 +333,24 @@ class UserSerializer(serializers.ModelSerializer):
             User: The created user instance.
         """
         password = validated_data.pop('password')
-        instance: User = super().create(validated_data)
+        avatar = validated_data.pop('avatar_upload', None)
+
+        instance = cast(User, super().create(validated_data))
+
         instance.set_password(password)
         instance.is_active = False  # Need to validate email first
-        instance.save(update_fields=['password', 'is_active'])
+        update_fields = ['password', 'is_active']
+
+        if avatar is not None:
+            instance.avatar = avatar
+            instance.avatar_thumbnails_ready = False
+            update_fields += ['avatar', 'avatar_thumbnails_ready']
+
+        instance.save(update_fields=update_fields)
+        process_user_avatar_updated(instance)
         return instance
 
+    @transaction.atomic
     @override
     def update(self, instance: User, validated_data: dict[str, Any]):
         """Update user and password if provided.
@@ -180,10 +363,23 @@ class UserSerializer(serializers.ModelSerializer):
             User: The updated user instance.
         """
         password = validated_data.pop('password', None)
+        avatar = validated_data.pop('avatar_upload', None)
+
+        old_avatar = get_user_avatar(instance)
         instance = super().update(instance, validated_data)
+
+        update_fields: list[str] = []
         if password is not None:
             instance.set_password(password)
-            instance.save(update_fields=['password'])
+            update_fields += ['password']
+
+        if avatar is not None:
+            instance.avatar = avatar
+            instance.avatar_thumbnails_ready = False
+            update_fields += ['avatar', 'avatar_thumbnails_ready']
+
+        instance.save(update_fields=update_fields)
+        process_user_avatar_updated(instance, old_avatar)
         return instance
 
 

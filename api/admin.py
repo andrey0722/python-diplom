@@ -56,6 +56,10 @@ from .services import checkout_basket
 from .services import get_order_state
 from .templates import get_order_context
 from .templates import get_order_items_context
+from .thumbnails import AvatarSize
+from .thumbnails import get_user_avatar_url
+from .thumbnails import load_user_avatar
+from .thumbnails import process_user_avatar_updated
 
 
 def get_admin_view(
@@ -293,6 +297,7 @@ class UserAdmin(BaseUserAdmin):
     list_display = (
         'id',
         'email',
+        'avatar_list_preview',
         'full_name',
         'last_login',
         'date_joined',
@@ -302,6 +307,10 @@ class UserAdmin(BaseUserAdmin):
     list_display_links = ('id', 'email')
     list_editable = ('is_active',)
     search_fields = ('email', 'first_name', 'last_name')
+    readonly_fields = (
+        'avatar_change_preview',
+        'avatar_thumbnails_ready',
+    )
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (
@@ -312,6 +321,9 @@ class UserAdmin(BaseUserAdmin):
                     'last_name',
                     'company',
                     'position',
+                    'avatar_change_preview',
+                    'avatar',
+                    'avatar_thumbnails_ready',
                 ),
             },
         ),
@@ -346,6 +358,64 @@ class UserAdmin(BaseUserAdmin):
     ordering = ('pk',)
     inlines = (ContactsInline,)
     save_on_top = True
+
+    @admin.display(description='Avatar')
+    def avatar_list_preview(self, user: User) -> str:
+        """Return a compact avatar image preview for the user list.
+
+        Args:
+            user (User): User shown in the admin list.
+
+        Returns:
+            str: HTML image preview or placeholder text.
+        """
+        if not user.avatar:
+            return '-'
+        url = get_user_avatar_url(user, AvatarSize.SMALL)
+        return format_html(
+            '<img src="{}" width="48" height="48" '
+            'style="object-fit: cover; border-radius: 50%;" />',
+            url,
+        )
+
+    @admin.display(description='Avatar preview')
+    def avatar_change_preview(self, user: User) -> str:
+        """Return a larger avatar image preview for the change form.
+
+        Args:
+            user (User): User shown in the admin change form.
+
+        Returns:
+            str: HTML image preview or placeholder text.
+        """
+        if not user.pk or not user.avatar:
+            return '-'
+        url = get_user_avatar_url(user, AvatarSize.MEDIUM)
+        return format_html(
+            '<img src="{}" width="128" height="128" '
+            'style="object-fit: cover; border-radius: 8px;" />',
+            url,
+        )
+
+    @override
+    def save_model(
+        self,
+        request: HttpRequest,
+        obj: User,
+        form: Any,
+        change: bool,
+    ) -> None:
+        """Save a user and process avatar side effects after changes.
+
+        Args:
+            request (HttpRequest): Current admin request.
+            obj (User): User being saved.
+            form (Any): Bound admin form.
+            change (bool): Whether an existing user is being changed.
+        """
+        old_avatar = load_user_avatar(obj.pk) if change and obj.pk else None
+        super().save_model(request, obj, form, change)
+        process_user_avatar_updated(obj, old_avatar)
 
 
 @admin.register(Token)

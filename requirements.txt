@@ -10,6 +10,7 @@ django-phonenumber-field[phonenumbers]~=8.4.0
 django-stubs-ext~=6.0.3
 djangorestframework~=3.17.1
 drf-spectacular[sidecar]~=0.29.0
+easy-thumbnails~=2.10.1
 httpx~=0.28.1
 pyyaml~=6.0.3
 psycopg2-binary~=2.9.12
