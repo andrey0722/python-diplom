@@ -80,7 +80,8 @@ cp .env.example .env
 | `CELERY_BROKER_URL` | URL брокера Celery. В проекте используется Redis. | `redis://default:redis_password@127.0.0.1:6379/0` |
 | `CELERY_WORKER_CONCURRENCY` | Количество процессов или потоков worker-а Celery. Для dev=режима достаточно `1`. | `1` |
 | `EMAIL_URL` | Настройка email backend для отправки email. Закомментированные строки в `.env.example` являются альтернативными настройками. | `filemail:///email` |
-| `SENTRY_URL` | DSN проекта Sentry. Используется `sentry-sdk` для отправки ошибок, логов и tracing-транзакций. | `https://key@example.sentry.io/123456` |
+| `SENTRY_ENABLED` | Включает инициализацию `sentry-sdk` и отправку ошибок, логов и tracing-транзакций. | `False` |
+| `SENTRY_URL` | DSN проекта Sentry. Используется только при `SENTRY_ENABLED=True`. | `https://key@example.sentry.io/123456` |
 | `LISTEN_PORT` | Внешний порт Nginx proxy при Docker-запуске. | `8080` |
 | `SQL_TRACE` | Включает подробное логирование каждого выполняемого SQL-запроса в Django Database Backend и middleware со статистикой запросов. Полезно для отладки ORM и SQL-запросов. | `False` |
 | `GOOGLE_OAUTH2_CLIENT_ID` | Client ID OAuth-клиента Google. Используется для входа через `/auth/social/google-oauth2/`. | `example.apps.googleusercontent.com` |
@@ -154,7 +155,7 @@ python compose.py dev down
 - `DJANGO_SECRET_KEY` с уникальным секретом;
 - `DJANGO_ALLOWED_HOSTS` со списком реальных доменов или IP;
 - рабочий `EMAIL_URL`, ведущий на реальный SMTP-сервер, подходящий для массовой отправки email-сообщений;
-- реальный `SENTRY_URL`, если нужно отправлять ошибки и трассировки в Sentry;
+- `SENTRY_ENABLED=True` и реальный `SENTRY_URL`, если нужно отправлять ошибки и трассировки в Sentry;
 - реальные `GOOGLE_OAUTH2_CLIENT_ID` и `GOOGLE_OAUTH2_CLIENT_SECRET`, если используется вход через Google;
 - при необходимости `LISTEN_PORT`, `DB_*` и `REDIS_PASSWORD`.
 
@@ -548,9 +549,9 @@ curl -X POST http://127.0.0.1:8000/api/v1/partner/update \
 
 ## Sentry
 
-Проект инициализирует `sentry-sdk` при загрузке настроек Django. DSN задается переменной
-`SENTRY_URL`; по умолчанию в `.env.example` указано демонстрационное значение, которое нужно
-заменить на DSN реального проекта Sentry.
+Проект инициализирует `sentry-sdk` при загрузке настроек Django, если `SENTRY_ENABLED=True`.
+DSN задается переменной `SENTRY_URL`; по умолчанию в `.env.example` указано демонстрационное
+значение, которое нужно заменить на DSN реального проекта Sentry.
 
 Интеграция отправляет ошибки Django, логи и tracing-транзакции. Для проверки отправки ошибок
 есть staff-only URL `/admin/trigger-error/`: он доступен только авторизованным сотрудникам

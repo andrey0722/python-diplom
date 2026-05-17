@@ -475,21 +475,25 @@ MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MiB
 # Sentry console settings
 # https://docs.sentry.io/platforms/python/integrations/django/
 
-import sentry_sdk
 
-SENTRY_URL = env.str(
-    'SENTRY_URL',
-    default='https://key@example.sentry.io/123456',  # pyright: ignore[reportArgumentType]
-)
+SENTRY_ENABLED = env.bool('SENTRY_ENABLED', default=False)
 
-sentry_sdk.init(
-    dsn=SENTRY_URL,
-    # Add data like request headers and IP for users,
-    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
-    send_default_pii=True,
-    # Enable sending logs to Sentry
-    enable_logs=True,
-    # Set traces_sample_rate to 1.0 to capture 100%
-    # of transactions for tracing.
-    traces_sample_rate=1.0,
-)
+if SENTRY_ENABLED:
+    import sentry_sdk
+
+    SENTRY_URL = env.str(
+        'SENTRY_URL',
+        default='https://key@example.sentry.io/123456',  # pyright: ignore[reportArgumentType]
+    )
+
+    sentry_sdk.init(
+        dsn=SENTRY_URL,
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+        # Enable sending logs to Sentry
+        enable_logs=True,
+        # Set traces_sample_rate to 1.0 to capture 100%
+        # of transactions for tracing.
+        traces_sample_rate=1.0,
+    )
