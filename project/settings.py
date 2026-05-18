@@ -114,6 +114,20 @@ if DEBUG:
     ]
 
 
+# Silk configuration
+# https://github.com/jazzband/django-silk
+
+SILK_ENABLED = env.bool('SILK_ENABLED', default=False)
+
+if SILK_ENABLED:
+    INSTALLED_APPS += ['silk']
+
+    MIDDLEWARE = [
+        'silk.middleware.SilkyMiddleware',
+        *MIDDLEWARE,
+    ]
+
+
 ROOT_URLCONF = 'project.urls'
 
 TEMPLATES = [
