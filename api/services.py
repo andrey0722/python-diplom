@@ -365,9 +365,14 @@ def get_or_create_models_by_field[T: Model](
         # WHERE id IN ()
         query = Q(pk__in={})
 
-    existing = list(
-        cls.objects.select_for_update().filter(query).order_by('id')
+    queryset = (
+        cls.objects.select_for_update()
+        .filter(query)
+        .order_by('id')
+        .only('id', *key_fields)
     )
+
+    existing = list(queryset.all())
     existing_keys = {model_object_key(obj, *key_fields) for obj in existing}
 
     # Exclude duplicate keys
@@ -378,8 +383,8 @@ def get_or_create_models_by_field[T: Model](
     }
     missing = [build_model(cls, item) for item in missing_data.values()]
     missing = cls.objects.bulk_create(missing, ignore_conflicts=True)
-    # Select all objects again in case there ware any conflicts
-    return list(cls.objects.select_for_update().filter(query).order_by('id'))
+    # Select all objects again in case there were any conflicts
+    return list(queryset.all())
 
 
 def make_model_field_dict[T: Model](
@@ -957,7 +962,7 @@ def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
     name = data['shop']
 
     try:
-        shop = get_and_lock_model(Shop, user=user)
+        shop = Shop.objects.select_for_update().only('id').get(user_id=user.pk)
     except Shop.DoesNotExist:
         shop = create_model(Shop, user=user, name=name, url=url)
         lock_model_instance(shop)
@@ -970,7 +975,7 @@ def update_shop_pricing(user: User, url: str, data: dict[str, Any]) -> None:
     categories = make_category_dict(data['categories'])
 
     # Clear all shop offers but reuse product records
-    ShopOffer.objects.filter(shop_id=shop.pk).delete()
+    ShopOffer.objects.filter(shop_id=shop.pk).only('id').delete()
 
     goods = data['goods']
     for item in goods:
@@ -1119,8 +1124,17 @@ def _lock_order_items(order: Order) -> OrderData:
         OrderData: Locked order, items, and shop offers.
     """
     # Lock the parent order object
-    order = Order.objects.select_for_update().order_by('id').get(pk=order.pk)
-    items = list(OrderItem.objects.filter(order_id=order.pk))
+    order = (
+        Order.objects.select_for_update()
+        .order_by('id')
+        .only('id', 'user_id')
+        .get(pk=order.pk)
+    )
+    items = list(
+        OrderItem.objects.filter(order_id=order.pk)
+        .order_by('id')
+        .only('id', 'quantity', 'shop_offer_id')
+    )
 
     # Lock all the shop offers
     offer_ids = {item.shop_offer_id for item in items}
@@ -1131,6 +1145,7 @@ def _lock_order_items(order: Order) -> OrderData:
             .select_related('shop')
             .filter(pk__in=offer_ids)
             .order_by('id')
+            .only('id', 'quantity', 'shop__is_active')
         )
     }
     return OrderData(order, items, offers)

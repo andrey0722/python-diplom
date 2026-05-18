@@ -16,6 +16,7 @@ Backend-приложение на Django REST Framework для автомати�
 - отдельные API-методы для поставщика: обновление прайса, включение или отключение приема заказов, просмотр заказов по своему магазину;
 - ограничение частоты API-запросов для анонимных и авторизованных пользователей, email-операций, входа и оформления заказов;
 - кэширование ORM-запросов через django-cachalot с использованием общего Django cache backend;
+- профилирование запросов и SQL через Django Silk в debug-режиме;
 - расширенная Django Admin: редактирование данных, оформление корзины, ограниченные переходы статусов заказа, защита активных заказов от некорректного редактирования;
 - email-уведомления через Celery: подтверждение email, сброс пароля, создание заказа, отмена заказа, смена статуса, уведомления администраторам магазинов;
 - мониторинг ошибок, логов и трассировок через Sentry;
@@ -28,7 +29,7 @@ Backend-приложение на Django REST Framework для автомати�
 - PostgreSQL для Docker-запуска, SQLite возможен для локальной разработки;
 - Redis в качестве брокера Celery и cache backend;
 - Celery для фоновой отправки email;
-- django-filter, django-environ, django-admin-extra-buttons, django-cachalot, easy-thumbnails;
+- django-filter, django-environ, django-admin-extra-buttons, django-cachalot, django-silk, easy-thumbnails;
 - drf-spectacular для OpenAPI-схемы, Swagger UI и ReDoc;
 - social-auth-app-django для входа через Google OAuth2;
 - sentry-sdk для отправки ошибок, логов и трассировок в Sentry;
@@ -80,6 +81,7 @@ cp .env.example .env
 | `CELERY_BROKER_URL` | URL брокера Celery. В проекте используется Redis. | `redis://default:redis_password@127.0.0.1:6379/0` |
 | `CELERY_WORKER_CONCURRENCY` | Количество процессов или потоков worker-а Celery. Для dev=режима достаточно `1`. | `1` |
 | `EMAIL_URL` | Настройка email backend для отправки email. Закомментированные строки в `.env.example` являются альтернативными настройками. | `filemail:///email` |
+| `SILK_ENABLED` | Включает Django Silk для профилирования HTTP-запросов и SQL в режиме `DJANGO_DEBUG=True`. | `False` |
 | `SENTRY_ENABLED` | Включает инициализацию `sentry-sdk` и отправку ошибок, логов и tracing-транзакций. | `False` |
 | `SENTRY_URL` | DSN проекта Sentry. Используется только при `SENTRY_ENABLED=True`. | `https://key@example.sentry.io/123456` |
 | `LISTEN_PORT` | Внешний порт Nginx proxy при Docker-запуске. | `8080` |
@@ -125,6 +127,7 @@ cp .env.example .env
 - API через Nginx: `http://127.0.0.1:8080/api/v1/`;
 - Django Admin: `http://127.0.0.1:8000/admin/`;
 - Django Admin через Nginx: `http://127.0.0.1:8080/admin/`;
+- Django Silk, если `DJANGO_DEBUG=True` и `SILK_ENABLED=True`: `http://127.0.0.1:8000/silk/`;
 - Mailpit Web UI: `http://127.0.0.1:8025/`;
 - PostgreSQL: `postgres://postgres_user:postgres_password@127.0.0.1:55432/db`, если используются значения по умолчанию.
 - Redis broker: `redis://default:redis_password@127.0.0.1:6379/0`, если используются значения по умолчанию.
@@ -152,6 +155,7 @@ python compose.py dev down
 Перед production-like запуском задайте безопасные значения:
 
 - `DJANGO_DEBUG=False`;
+- `SILK_ENABLED=False`;
 - `DJANGO_SECRET_KEY` с уникальным секретом;
 - `DJANGO_ALLOWED_HOSTS` со списком реальных доменов или IP;
 - рабочий `EMAIL_URL`, ведущий на реальный SMTP-сервер, подходящий для массовой отправки email-сообщений;
@@ -216,6 +220,7 @@ Redis должен быть доступен по `CELERY_BROKER_URL`: Celery-п
    CACHE_URL=filecache://.cache
    CELERY_BROKER_URL=redis://default:redis_password@127.0.0.1:6379/0
    EMAIL_URL=consolemail://
+   SILK_ENABLED=False
    SQL_TRACE=False
    ```
 
@@ -374,6 +379,9 @@ Swagger UI и ReDoc используют локальные static-ресурс�
 ORM-запросов и автоматически инвалидирует их при изменении связанных таблиц. В режиме
 `DJANGO_DEBUG=True` Django Debug Toolbar показывает отдельную панель Cachalot для
 проверки попаданий в кэш.
+
+Для детального профилирования HTTP-запросов и SQL можно включить `SILK_ENABLED=True`
+в debug-режиме. Тогда интерфейс Django Silk доступен по `/silk/`.
 
 Настроенные лимиты:
 

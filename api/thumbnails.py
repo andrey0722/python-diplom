@@ -79,6 +79,8 @@ def get_user_avatar_thumbnail(
     Returns:
         ImageFieldFile | None: Thumbnail file, or None if unavailable.
     """
+    if not user.avatar_thumbnails_ready:
+        return None
     return get_avatar_thumbnail(user.avatar, size)
 
 

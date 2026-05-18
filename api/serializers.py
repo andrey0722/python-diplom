@@ -27,8 +27,8 @@ from .models import ShopOffer
 from .models import Token
 from .models import User
 from .thumbnails import AvatarSize
-from .thumbnails import get_avatar_thumbnail
 from .thumbnails import get_user_avatar
+from .thumbnails import get_user_avatar_thumbnail
 from .thumbnails import process_user_avatar_updated
 
 
@@ -151,36 +151,11 @@ class AvatarUploadField(serializers.ImageField):
         return value
 
 
-class ImageMethodField(serializers.ImageField):
+class ImageMethodField(
+    serializers.SerializerMethodField,
+    serializers.ImageField,
+):
     """Read-only image field populated by a serializer method."""
-
-    def __init__(
-        self,
-        method_name: str | None = None,
-        **kwargs: object,
-    ) -> None:
-        """Initialize a read-only method-backed image field.
-
-        Args:
-            method_name (str | None): Serializer method used for the value.
-            **kwargs (object): Additional image field options.
-        """
-        self.method_name = method_name
-        kwargs['source'] = '*'
-        kwargs['read_only'] = True
-        super().__init__(**kwargs)
-
-    @override
-    def bind(self, field_name: str, parent: serializers.Field) -> None:
-        """Bind the field and infer the serializer method name if needed.
-
-        Args:
-            field_name (str): Name of the field on the serializer.
-            parent (serializers.Field): Parent serializer field object.
-        """
-        if self.method_name is None:
-            self.method_name = f'get_{field_name}'
-        super().bind(field_name, parent)
 
     @override
     def to_representation(self, value: Any) -> Any:
@@ -192,10 +167,10 @@ class ImageMethodField(serializers.ImageField):
         Returns:
             Any: Image representation produced by the base field.
         """
-        assert self.method_name is not None
-        method = getattr(self.parent, self.method_name)
-        value = method(value)
-        return super().to_representation(value)
+        value = serializers.SerializerMethodField.to_representation(
+            self, value
+        )
+        return serializers.ImageField.to_representation(self, value)
 
 
 class AvatarSerializer(serializers.Serializer):
@@ -212,20 +187,18 @@ class AvatarSerializer(serializers.Serializer):
     @override
     def update(
         self,
-        instance: User | ImageFieldFile,
+        instance: User,
         validated_data: dict[str, Any],
     ) -> User:
         """Replace a user's avatar and schedule thumbnail processing.
 
         Args:
-            instance (User | ImageFieldFile): User receiving the new avatar.
+            instance (User): User receiving the new avatar.
             validated_data (dict[str, Any]): Validated avatar upload data.
 
         Returns:
             User: Updated user instance.
         """
-        assert isinstance(instance, User)
-
         old_avatar = get_user_avatar(instance)
         new_avatar = validated_data['avatar_upload']
 
@@ -236,69 +209,56 @@ class AvatarSerializer(serializers.Serializer):
 
         return instance
 
-    def get_original(self, obj: User | ImageFieldFile) -> ImageFieldFile:
+    def get_original(self, user: User) -> ImageFieldFile:
         """Return the original avatar image.
 
         Args:
-            obj (User | ImageFieldFile): User or direct avatar file.
+            user (User): User object to extract avatar file from.
 
         Returns:
             ImageFieldFile: Original avatar file.
         """
-        return obj.avatar if isinstance(obj, User) else obj
+        return user.avatar
 
-    def get_small(self, obj: User | ImageFieldFile) -> ImageFieldFile | None:
+    def get_small(self, user: User) -> ImageFieldFile | None:
         """Return the small avatar thumbnail.
 
         Args:
-            obj (User | ImageFieldFile): User or direct avatar file.
+            user (User): User object to extract avatar file from.
 
         Returns:
             ImageFieldFile | None: Small thumbnail file, if available.
         """
-        return self._get_thumbnail(obj, AvatarSize.SMALL)
+        return get_user_avatar_thumbnail(user, AvatarSize.SMALL)
 
-    def get_medium(self, obj: User | ImageFieldFile) -> ImageFieldFile | None:
+    def get_medium(self, user: User) -> ImageFieldFile | None:
         """Return the medium avatar thumbnail.
 
         Args:
-            obj (User | ImageFieldFile): User or direct avatar file.
+            user (User): User object to extract avatar file from.
 
         Returns:
             ImageFieldFile | None: Medium thumbnail file, if available.
         """
-        return self._get_thumbnail(obj, AvatarSize.MEDIUM)
+        return get_user_avatar_thumbnail(user, AvatarSize.MEDIUM)
 
-    def get_large(self, obj: User | ImageFieldFile) -> ImageFieldFile | None:
+    def get_large(self, user: User) -> ImageFieldFile | None:
         """Return the large avatar thumbnail.
 
         Args:
-            obj (User | ImageFieldFile): User or direct avatar file.
+            user (User): User object to extract avatar file from.
 
         Returns:
             ImageFieldFile | None: Large thumbnail file, if available.
         """
-        return self._get_thumbnail(obj, AvatarSize.LARGE)
-
-    def _get_thumbnail(
-        self,
-        obj: User | ImageFieldFile,
-        size: AvatarSize,
-    ) -> ImageFieldFile | None:
-        if isinstance(obj, User):
-            if not obj.avatar_thumbnails_ready:
-                return None
-            avatar = obj.avatar
-        else:
-            avatar = obj
-        return get_avatar_thumbnail(avatar, size)
+        return get_user_avatar_thumbnail(user, AvatarSize.LARGE)
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model with password handling."""
 
     password = PasswordField(write_only=True)
-    avatar = AvatarSerializer(read_only=True)
+    avatar = AvatarSerializer(read_only=True, source='*')
 
     avatar_upload = AvatarUploadField(write_only=True)
 
