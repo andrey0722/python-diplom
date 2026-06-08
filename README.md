@@ -350,12 +350,6 @@ Google-аккаунта и выдает обычный API-токен в фор�
 `/api/v1/user/login/social/error`, где API отвечает единым JSON-форматом с
 полями `detail`, `backend` и `code`.
 
-Все методы API реализованы совместимыми с предложенным API в формате Postman Collection:
-[netology-pd-diplom](https://documenter.getpostman.com/view/5037826/SVfJUrSc)
-
-Для фактической реализации приведённая выше Postman Collection была дополнена:
-[netology-pd-diplom-new](https://documenter.getpostman.com/view/46171784/2sBXqKp16P)
-
 В проект встроена актуальная OpenAPI-документация:
 
 | URL | Назначение |
